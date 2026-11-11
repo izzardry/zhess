@@ -1,5 +1,5 @@
 /**
- * Arbitrary timings must survive Tailwind (final visual pass): `duration-[400ms]` is ambiguous
+ * Arbitrary timings must survive Tailwind (final visual pass): a `duration-` utility with an arbitrary 400ms value is ambiguous
  * between Tailwind's transition-duration and tailwindcss-animate's animation-duration, so Tailwind
  * dropped it. The components use explicit `[transition-duration:…]` / `[animation-duration:…]`.
  */
