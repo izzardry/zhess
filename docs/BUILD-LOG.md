@@ -34,12 +34,12 @@ _(Written at the end of the run.)_
 
 ### Milestone 3 · Rooms
 
-- [ ] 3A · Sync
-- [ ] 3B · Transports
-- [ ] 3C · Room
-- [ ] 3D · Room UI
-- [ ] Integrator 3
-- [ ] Gate 3
+- [x] 3A · Sync
+- [x] 3B · Transports
+- [x] 3C · Room
+- [x] 3D · Room UI
+- [x] Integrator 3
+- [x] Gate 3
 
 ### Final phase · Audit and polish
 
@@ -121,6 +121,27 @@ _(One line each: where the design was silent, what was chosen and why.)_
 - Integrator 2: No visible "computer thinking" indicator (the design names none); exposed as `data-computer` on the stage for tests.
 - Gate 2 fix: The win/loss tint stays a `-z-10` fixed layer; the stage root became a stacking context (`isolate`) so the body background no longer hides it. The clock dial clamp moved to `components/start/dialPlacement.ts` and reserves the caption, a popped item and the bottom safe area. The game-over duration adds the flagged side's remaining time for games lost on time (derived from the log and time control; no new stored field).
 
+**Milestone 3**
+- 3A: Reconcile (DESIGN 9.4) converges in at most 6 messages. A finished copy beats a longer unfinished copy that continues it (an offline resignation crossing an offline move). Plies compare by move and ms, and a different `white`/`tc` for the same game number counts as a fork. Only the `logs` step reports a fork, so each device shows the restored toast exactly once.
+- 3A: The `head.hash` is a synchronous 64-bit non-cryptographic hash (cyrb53 style) over n, epoch, white, tc and each ply's move and ms, plus `.result.by` when the game is over. Its value is pinned in a test. Adopted logs are replayed through ZhessApi and stored in normalized form.
+- 3A: The seat proof is HMAC-SHA-256(key, nonce ‖ code ‖ prover seat byte); verifySeat compares in constant time and never rejects.
+- 3B: PeerJS: the anchor is `zhess-<CODE>`; dialers register `zhess-<CODE>-<random>`. ICE servers are STUN only (two Google, one Cloudflare), overriding PeerJS's default config, which includes TURN. Failure classes: broker-unreachable (socket/server error or 10 s timeout), id-taken, ice-failed, peer-gone (after 3 claim/dial flips). The anchor accepts the newest connection. The `online` event resets the backoff; focus and visibility cut the wait short. peerjs is loaded by dynamic import.
+- 3B: The manual offer is reduced to a compact versioned line (UDP component-1 candidates, at most 10, no related addresses), deflate-raw and base64url. Real links are 155–230 characters (QR version 9–11, error correction M). An answer carries the offer's ufrag, so stale answers are rejected. Non-trickle gathering is capped at 5 s; the host gives up 20 s after applying the answer.
+- 3B: BroadcastChannel hand-over on `zhess:manual:<CODE>`; the answer tab gets a "took" reply or falls back after 1.5 s.
+- 3C: Start with ROOM stores an open room at once, so the creator sees it in history and can close the app after sharing. An invite link only joins. If neither device holds the room, the anchor creates it. The room locks when the joiner's first `head` proves it received the key.
+- 3C: Requests are tied to (n, epoch, len) and lapse when the game changes. Only one outgoing request at a time; it is asked again after a reconnect if still valid. Crossing draw offers or rematch requests count as agreement; crossing takebacks do not. Takeback, draw and rematch need a live connection; resignation works offline and arrives through reconcile.
+- 3C: While disconnected, the opponent's turn pauses. In timed games the own turn pauses too and the board locks (also while the creator waits for a joiner in a timed room). In untimed games the own turn keeps counting and offline moves are allowed. `grant` and `logs` messages are split below 200 000 bytes.
+- 3D: Tab guard (DESIGN 9.12) uses Web Locks. The second tab is read-only, follows the owner through `storage` events, takes over when the owner closes, and offers "Use here". Without Web Locks every tab owns the room. A tab opened from an answer link stays passive.
+- 3D: Broker and manual connection race; the first channel to open wins. A lost manual channel restarts the broker. "Connect manually" is offered at once on broker-unreachable or ice-failed, otherwise after 10 s without an open channel. Whoever presses it becomes the manual host.
+- 3D: Request toasts stay until answered and vanish when the request lapses. Presence toasts share one id, so a flap shows only the latest. The failure toast shows once per cause. QR codes are dark on a white plate in both themes; Share shows only where navigator.share exists.
+- 3D: The running room turn is banked in sessionStorage `zhess:room-turn` (tab-local, ignored after 12 h). Room vocabulary: Raum / salon / sala; opponent: Gegner / adversaire / rival.
+- Integrator 3: The invite link `#/?s=CODE&o=r` opens the room at once. The start screen with ROOM selected no longer writes `o=r` to the address bar; the choice is remembered in `zhess:opponent`.
+- Integrator 3: A room game from history reconnects if it is unfinished or is the room's latest game (so a rematch is still possible); older finished games open in review.
+- Integrator 3: Entering a room whose current game is over shows the overlay with Rematch, without the tint (Rematch lives only on the overlay).
+- Integrator 3: Share in a live room opens the invite sheet. "Paused" shows on both strips in timed rooms while the clock is paused, and the opponent's strip dims while they are disconnected.
+- Integrator 3: The e2e manual-path tests block the PeerJS WebSocket (`context.routeWebSocket`), so only STUN leaves the machine. No extra Chromium flags were needed: mDNS host candidates connect between two headless contexts.
+- Gate 3 fix: There is no outgoing request toast; the requester sees a pulsing pending state on the undo/flag/Rematch button (DESIGN 9.7). Request toasts have a single frame. The broker-failure toast is held back while the invite or manual sheet is open and for a manual guest, and shows afterwards only if still owed.
+
 ## Deviations
 
 _(Where a design decision could not be built as stated: what was built instead, and why.)_
@@ -135,6 +156,13 @@ _(Where a design decision could not be built as stated: what was built instead, 
 - 2C: The threat peek was already built in milestone 1; 2C added only a `threatSquares` helper. The guard runs against the real engine in an extra test, `src/lib/blunder.engine.test.ts`.
 - Integrator 2: The board does not show the dropped move during the blunder check (≤ 150 ms; about 10 ms with a warm engine), to avoid double or wrong screen-reader announcements. A small fix in useGameState outside the milestone's scope: the saved-games listener re-reads the store on subscribe (Start instead of Resume after Back from a linked game).
 - Integrator 2: Contract additions: `ClockPillAnchor.source`, `StripClock.ms` (rendered as `data-ms`); `stripClock` was replaced by `reviewClockView` in stage.ts.
+- 3A: `reconcile` returns `adopt?: GameLog[]`, because rule 1 may adopt several games. The seat proof also signs the code and the prover's seat (DESIGN 9.3 says HMAC(key, nonce)), to block a reflection attack.
+- 3B: During development the 3B agent ran one throwaway Chromium smoke test against the public broker 0.peerjs.com (random code, no personal data) plus manual-path checks that used public STUN only; neither was committed.
+- 3C: A device without a key always sends `join`; the device holding the room decides between welcome and a rejoin request (DESIGN 9.11 lists join and rejoin separately; a received `rejoin` is still accepted). `end` carries `epoch` and `len` so a resignation crossing a move resolves without a fork.
+- 3C/3B contract additions, still local and not merged into types.ts: TransportFailure `peer-gone`; EndMsg `epoch`/`len`; the RoomTransport extras (state, failure, onRole, onFailure, reconnect); RoomController methods return boolean.
+- 3D: The second tab gets a "Use here" take-over action beyond DESIGN 9.12's read-only message.
+- Integrator 3: Removed `invite`/`consumeInvite` from useGameState; invite links open the room directly. Edited 3B's manual.test.ts (test only) to fix a timing flake under full-suite load. `StripClock` gains `note`; `UseSavedGames` gains `rooms`.
+- Gate 3 fix: Changed the unit test that asserted an outgoing request toast, because DESIGN 9.7 asks for a pending state on the button instead; gave one long Index.room integration test an explicit 15 s timeout (no assertion loosened).
 
 ## Open items
 
@@ -149,6 +177,13 @@ _(Features switched off in `src/lib/flags.ts`, tests marked `fixme`, and anythin
 - Minor duplication left: DEFAULT_LEVEL in lib/levels.ts, lib/gameRecord.ts and components/start/options.ts; useComputer's toTc vs lib/clock.ts toTimeControl; useGameState's own Date.now turn timer is now unused by the page.
 - On phones the sonner toast covers the toolbar for its ~4 s lifetime (inherited Zudoku placement); for the final visual pass.
 - The custom clock dial floats over the opponent selector and its caption half-covers the clock pill's label while open (cosmetic; for the final visual pass).
+- Rooms: if both players end the same game while disconnected (for example both resign offline), the two finished copies count as a fork and seat 0's copy wins with a restore toast on both devices. A test pins this behaviour.
+- Rooms: `head` summarizes only the current game, so differences in older finished games are repaired only when they travel in a `logs` message (normally before a rematch).
+- Rooms: no channel binding. A stranger relaying between two online players who both dial the stranger's anchor id could read moves (not the key); out of scope under DESIGN 9.3's threat model.
+- Rooms: if the 100-game store cap evicts old room games, the room score is updated incrementally instead of being recomputed.
+- DESIGN 4.1: a joiner's color pill is not dimmed, because the start screen cannot tell a joiner from a creator before connecting.
+- Rooms: a manually connected room falling back to the broker is covered by unit tests only, not e2e. Firefox and WebKit are not run in e2e (Chromium only); Firefox SDP rebuild is untested.
+- Minor M3 visual notes: presence toasts cover the toolbar for ~4 s on phones; the guest's manual sheet auto-focuses its close button; the hovered sonner stack can rise over the board's bottom rank on desktop.
 
 ## Gate results
 
@@ -159,3 +194,5 @@ _(Per gate: commands run, pass/fail counts, what was disabled.)_
 **Gate 1** (2026-11-11, round 1 of up to 4): `lint` 0 problems · `typecheck` clean · `test` 39 files / 507 tests passed · `build` ok (25 precache entries; 561 kB chunk warning) · `e2e` 23/23 passed (m1 × 2 viewports, screenshots, smoke). Verifier confirmed every Gate 1 scenario is implemented at both viewports with no skips and checked all 16 screenshots. Passed, nothing disabled.
 
 **Gate 2** (2026-11-11, passed in round 2 of up to 4). Round 1 failed on three findings: the win/loss page tint was hidden behind the body background, the clock-dial caption was clipped at 390×844, and the game-over duration left out the turn on which the flag fell. The machine crashed during fix round 1; the workflow was resumed from its cache. Fix 514984b. Round 2: `lint` 0 problems · `typecheck` clean · `test` 58 files / 769 tests passed (the real-engine suites ran, not skipped) · `build` ok (25 precache entries; engine runtime-cached by CacheFirst `engine-cache`, not precached) · `e2e` 32/32 (smoke 5, m1 14, m2 9; no skips or retries) · `node scripts/selfplay.mjs` level 12 beat level 1. Screenshots in docs/screenshots/m2/ (`r2-*` are after the fix). Passed, nothing disabled.
+
+**Gate 3** (2026-11-11, passed in round 2 of up to 4). Round 1: all commands passed, `e2e` 37/37, but three layout faults failed it: the never-expiring broker-failure toast covered the invite and manual sheets; request toasts had a double frame; the outgoing pending toast covered the toolbar. Fix 9b2c717. Round 2: `lint` 0 problems · `typecheck` clean · `test` 69 files / 1410 tests passed · `build` ok (only the >500 kB chunk warning) · `e2e` 37/37 with 0 skipped, 0 flaky: smoke 5, m1 18, m2 9, m3 5. The m3 tests are the manual path, recovery, offline move, the BroadcastChannel hand-over (same context, two pages) and the broker path. **Broker path: verified.** Both contexts connected through the public 0.peerjs.com broker (`data-room-via=broker`) and played moves across, in both rounds. 30 screenshots in docs/screenshots/m3/. Passed, nothing disabled.
