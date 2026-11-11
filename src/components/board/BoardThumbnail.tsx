@@ -5,7 +5,7 @@
 import { memo, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import type { Color, Square } from '@/lib/types';
-import { cellToSquare, isLightSquare, parseFenBoard, squareToCell } from './geometry';
+import { HIGHLIGHT_ALPHA, cellToSquare, isLightSquare, parseFenBoard, squareToCell } from './geometry';
 import { PIECE_SHAPES, partStyle, piecePaint, strokeForSize } from './pieceShapes';
 
 export interface BoardThumbnailProps {
@@ -36,11 +36,12 @@ export const BoardThumbnail = memo(function BoardThumbnail({
   for (let row = 0; row < 8; row++) {
     for (let col = 0; col < 8; col++) {
       const sq = cellToSquare(col, row, orientation) as Square;
-      const tints: number[] = [];
-      if (!isLightSquare(sq)) tints.push(0.1);
-      if (lastMove && (lastMove.from === sq || lastMove.to === sq)) tints.push(0.1);
-      tints.forEach((a, i) =>
-        cells.push(<rect key={`${sq}-${i}`} x={col * 100} y={row * 100} width={100} height={100} fill="hsl(var(--foreground))" fillOpacity={a} />),
+      const tints: string[] = [];
+      // Square tones and the half-step last-move tint as on the board (Square.tsx).
+      tints.push(`var(--zhess-sq-${isLightSquare(sq) ? 'light' : 'dark'})`);
+      if (lastMove && (lastMove.from === sq || lastMove.to === sq)) tints.push(`hsl(var(--foreground) / ${HIGHLIGHT_ALPHA})`);
+      tints.forEach((fill, i) =>
+        cells.push(<rect key={`${sq}-${i}`} x={col * 100} y={row * 100} width={100} height={100} fill={fill} />),
       );
     }
   }

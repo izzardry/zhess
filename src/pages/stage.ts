@@ -26,15 +26,15 @@ export const TRANSITION_MS = 500;
 export const SWIPE_MIN_PX = 40;
 
 /**
- * Board cell size. DESIGN 5.1's `clamp(34px, min(11.5vw, 10vh), 76px)`, with one more bound in
- * portrait: 20rem of height stay free for the chrome, so on short desktop windows the info pill,
- * the two player strips and the toolbar never overlap the board in a game, and the start screen's
- * header and footer barely touch the blurred preview. The board keeps one size in every state, so
+ * Board cell size. DESIGN 5.1's `clamp(34px, min(11.5vw, 10vh), 96px)`, with one more bound in
+ * portrait: 14rem of height stay free for the chrome, so on desktop windows the info pill, the two
+ * player strips and the toolbar never overlap the board in a game. On the start screen the header
+ * and footer may cover the edge of the blurred preview. The board keeps one size in every state, so
  * it never moves. Phones are limited by width (11.5vw) and are unaffected. Mobile landscape has the
  * chrome in side rails, so only the height of the screen limits the board there.
  */
-export const CELL_SIZE_PORTRAIT = 'clamp(34px, min(11.5vw, 10vh, calc((100dvh - 20rem) / 8)), 76px)';
-export const CELL_SIZE_LANDSCAPE = 'clamp(34px, calc((100dvh - 3rem) / 8), 76px)';
+export const CELL_SIZE_PORTRAIT = 'clamp(34px, min(11.5vw, 10vh, calc((100dvh - 14rem) / 8)), 96px)';
+export const CELL_SIZE_LANDSCAPE = 'clamp(34px, calc((100dvh - 3rem) / 8), 96px)';
 
 export const other = (c: Color): Color => (c === 'w' ? 'b' : 'w');
 

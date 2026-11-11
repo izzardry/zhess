@@ -8,6 +8,24 @@
 /* Zhess-specific styles go below. Keep them in @layer components so utilities still win. */
 
 /*
+ * Chess colors that hold in both themes (DESIGN 5.1). White pieces are filled with the lighter ink
+ * and black pieces with the darker one; light squares are the lighter squares. Declared on the
+ * same selectors as the Ztyle tokens, so a `.light` / `.dark` subtree resolves its own values.
+ */
+:root, .light {
+  --zhess-ink-light: var(--background);
+  --zhess-ink-dark: var(--foreground);
+  --zhess-sq-light: transparent;
+  --zhess-sq-dark: hsl(var(--foreground) / 0.1);
+}
+.dark {
+  --zhess-ink-light: var(--foreground);
+  --zhess-ink-dark: var(--background);
+  --zhess-sq-light: hsl(var(--foreground) / 0.1);
+  --zhess-sq-dark: transparent;
+}
+
+/*
  * Toasts in mobile landscape (components/ui/sonner.tsx): bottom right beside the board, also on
  * phones of 600 px or less, where sonner would otherwise stretch them across the screen.
  */

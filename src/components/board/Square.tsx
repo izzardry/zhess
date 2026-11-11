@@ -5,6 +5,7 @@
 import { memo, type CSSProperties } from 'react';
 import { cn } from '@/lib/utils';
 import type { Piece, Square } from '@/lib/types';
+import { HIGHLIGHT_ALPHA } from './geometry';
 import { PieceIcon } from './PieceIcon';
 
 export interface BoardSquareProps {
@@ -41,6 +42,13 @@ export interface BoardSquareProps {
 const tint = (alphaColor: string) => `linear-gradient(${alphaColor}, ${alphaColor})`;
 const FG = (a: number) => `hsl(var(--foreground) / ${a})`;
 const RED = (a: number) => `hsl(var(--destructive) / ${a})`;
+/**
+ * Light and dark squares differ by a `foreground/10` overlay, placed on the dark squares in the
+ * light theme and on the light squares in the dark theme (src/index.css), so light squares are
+ * the lighter ones in both. Grey state fills use half that step: a highlighted square lands
+ * between the two square tones and never matches the other color, so the checkerboard holds.
+ */
+const SQUARE_TONE = (light: boolean) => `var(--zhess-sq-${light ? 'light' : 'dark'})`;
 
 export const BoardSquare = memo(function BoardSquare({
   square,
@@ -67,13 +75,13 @@ export const BoardSquare = memo(function BoardSquare({
   const overlays: string[] = [];
   if (threat) overlays.push(tint(RED(0.1)));
   if (check) overlays.push(tint(RED(0.15)));
-  if (selected) overlays.push(tint(FG(0.15)));
-  if (lastMove) overlays.push(tint(FG(0.1)));
-  if (!light) overlays.push(tint(FG(0.1)));
+  if (selected) overlays.push(tint(FG(HIGHLIGHT_ALPHA)));
+  if (lastMove) overlays.push(tint(FG(HIGHLIGHT_ALPHA)));
+  overlays.push(tint(SQUARE_TONE(light)));
   const style: CSSProperties = {
     width: 'var(--cell-size)',
     height: 'var(--cell-size)',
-    backgroundImage: overlays.length ? overlays.join(', ') : undefined,
+    backgroundImage: overlays.join(', '),
   };
 
   return (

@@ -8,7 +8,10 @@ export const FILES = 'abcdefgh';
 export const BOARD_SIZE = 8;
 
 /** Default `--cell-size` (DESIGN 5.1). */
-export const DEFAULT_CELL_SIZE = 'clamp(34px, min(11.5vw, 10vh), 76px)';
+export const DEFAULT_CELL_SIZE = 'clamp(34px, min(11.5vw, 10vh), 96px)';
+
+/** Grey state fills (last move, selection): half the light/dark step, so the checkerboard holds. */
+export const HIGHLIGHT_ALPHA = 0.05;
 
 /** Column (0 left … 7 right) and row (0 top … 7 bottom) of a square as drawn. */
 export function squareToCell(sq: Square, orientation: Color): { col: number; row: number } {

@@ -5,7 +5,7 @@
  */
 import { memo, type CSSProperties } from 'react';
 import type { Color, PieceType } from '@/lib/types';
-import { BACKGROUND, FOREGROUND, PIECE_SHAPES, partStyle, piecePaint, strokeForSize } from './pieceShapes';
+import { BACKGROUND, PIECE_SHAPES, partStyle, piecePaint, strokeForSize } from './pieceShapes';
 
 export interface PieceIconProps {
   readonly type: PieceType;
@@ -16,7 +16,7 @@ export interface PieceIconProps {
   readonly strokeWidth?: number;
   readonly className?: string;
   readonly style?: CSSProperties;
-  /** Swap foreground and background, for a piece drawn on an inverted (`bg-foreground`) surface. */
+  /** Outline in `background`, for a piece drawn on an inverted (`bg-foreground`) surface. */
   readonly inverted?: boolean;
   /** Accessible name. Without it the icon is decorative (`aria-hidden`). */
   readonly title?: string;
@@ -32,7 +32,7 @@ export const PieceIcon = memo(function PieceIcon({
   inverted,
   title,
 }: PieceIconProps) {
-  const paint = inverted ? piecePaint(color, BACKGROUND, FOREGROUND) : piecePaint(color);
+  const paint = inverted ? piecePaint(color, BACKGROUND) : piecePaint(color);
   const sw = strokeWidth ?? strokeForSize(size);
   return (
     <svg

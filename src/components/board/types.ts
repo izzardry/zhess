@@ -68,7 +68,7 @@ export interface ChessBoardProps {
   readonly captureKeys?: boolean;
   /** Announce each new move in a polite live region (DESIGN 14.1). Default true. */
   readonly announce?: boolean;
-  /** CSS length for `--cell-size`. Default `clamp(34px, min(11.5vw, 10vh), 76px)` (DESIGN 5.1). */
+  /** CSS length for `--cell-size`. Default `clamp(34px, min(11.5vw, 10vh), 96px)` (DESIGN 5.1). */
   readonly cellSize?: string;
   /** Extra classes on the outer wrapper (e.g. the blur of the start-screen preview). */
   readonly className?: string;

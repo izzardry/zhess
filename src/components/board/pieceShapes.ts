@@ -92,22 +92,33 @@ export interface PiecePaint {
 
 export const FOREGROUND = 'hsl(var(--foreground))';
 export const BACKGROUND = 'hsl(var(--background))';
+/** The lighter and the darker of foreground and background in the current theme (src/index.css). */
+export const INK_LIGHT = 'hsl(var(--zhess-ink-light))';
+export const INK_DARK = 'hsl(var(--zhess-ink-dark))';
 
-/** White: background fill + foreground outline. Black: foreground fill + background details. */
-export function piecePaint(color: Color, fg = FOREGROUND, bg = BACKGROUND): PiecePaint {
-  return color === 'w' ? { fill: bg, stroke: fg, contrast: fg } : { fill: fg, stroke: fg, contrast: bg };
+/**
+ * White pieces are light and black pieces dark in both themes; only the outline follows the
+ * surface (`stroke` contrasts with it). On a light surface white reads as an outline and black as
+ * a solid shape; on a dark surface white is solid and black an outline.
+ */
+export function piecePaint(color: Color, stroke = FOREGROUND, light = INK_LIGHT, dark = INK_DARK): PiecePaint {
+  return color === 'w' ? { fill: light, stroke, contrast: dark } : { fill: dark, stroke, contrast: light };
 }
 
 /**
  * Standalone SVG markup of a piece, for scripts (app icon, OG image) and tests.
- * Pass literal colors (e.g. `#0d0d0d`, `#fafafa`) where CSS variables are not available.
+ * Pass literal colors of a light surface (e.g. `fg: '#0d0d0d'`, `bg: '#fafafa'`) where CSS variables
+ * are not available; without them the piece follows the theme.
  */
 export function pieceSvgMarkup(
   type: PieceType,
   color: Color,
   opts: { size?: number; fg?: string; bg?: string; strokeWidth?: number } = {},
 ): string {
-  const paint = piecePaint(color, opts.fg ?? FOREGROUND, opts.bg ?? BACKGROUND);
+  const paint =
+    opts.fg || opts.bg
+      ? piecePaint(color, opts.fg ?? FOREGROUND, opts.bg ?? BACKGROUND, opts.fg ?? FOREGROUND)
+      : piecePaint(color);
   const sw = opts.strokeWidth ?? strokeForSize(opts.size);
   const size = opts.size ? ` width="${opts.size}" height="${opts.size}"` : '';
   const parts = PIECE_SHAPES[type]

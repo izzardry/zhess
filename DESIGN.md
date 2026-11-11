@@ -183,9 +183,9 @@ There is no separate "join" flow. Typing a friend's code with the selector on `R
 
 ### 5.1 Drawing
 
-- 8×8 grid sized from one variable, `--cell-size: clamp(34px, min(11.5vw, 10vh), 76px)`, so it fits from 320 × 568 upward without scrolling. **(derived)**
-- Squares are grayscale. Light squares use `card`, dark squares use `card` with a `foreground/10` overlay. Both themes work from the same tokens.
-- Pieces are one custom SVG set of six shapes with thin, even strokes. White pieces are stroked in `foreground` and filled with `background`. Black pieces are filled with `foreground`. The contrast holds on both square colors and in both themes because fill and stroke swap together with the theme.
+- 8×8 grid sized from one variable, `--cell-size: clamp(34px, min(11.5vw, 10vh), 96px)`, so it fits from 320 × 568 upward without scrolling. In portrait, 14rem of height stays free for the info pill, the player strips and the toolbar. **(derived; cap raised from 76px by the owner after the first release)**
+- Squares are grayscale, and the light squares are the lighter ones in both themes. The two tones differ by a `foreground/10` overlay: on the dark squares in the light theme, on the light squares in the dark theme.
+- Pieces are one custom SVG set of six shapes with thin, even strokes. White pieces are filled with the lighter of `background` and `foreground`, black pieces with the darker one, in both themes, so white always looks white. The outline is always `foreground`, so it contrasts with the board: in the light theme white reads as an outline and black as a solid shape, in the dark theme white is solid and black an outline.
 - The same six SVG symbols are reused for captured pieces, thumbnails, the promotion dial, the move strip (figurine notation) and the app icon.
 - Your color is at the bottom. In a room and against the computer the board is oriented once at game start and stays.
 
@@ -198,12 +198,12 @@ The board never rotates between turns. Two seatings exist, switched by a toolbar
 
 ### 5.3 Square states
 
-In priority order, lowest first. Fills are overlays on the square color, as Ztyle requires.
+In priority order, lowest first. Fills are overlays on the square color, as Ztyle requires. Grey fills are half the light/dark step (`foreground/5`), so a highlighted square sits between the two square tones and the checkerboard stays readable.
 
 | State | Visual | Needs helpers |
 |-------|--------|---------------|
-| Last move (from and to) | `foreground/10` overlay | yes |
-| Selected piece | `foreground/15` overlay + `ring-2 ring-foreground/50` | no |
+| Last move (from and to) | `foreground/5` overlay | yes |
+| Selected piece | `foreground/5` overlay + `ring-2 ring-foreground/50` | no |
 | Legal target, empty | centered dot, `foreground/25` | yes |
 | Legal target, capture | ring around the square, `foreground/25` | yes |
 | Premove (from and to) | dashed `ring-foreground/40` | no |

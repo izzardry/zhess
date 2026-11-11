@@ -20,6 +20,8 @@ import {
 } from './geometry';
 import { PieceIcon } from './PieceIcon';
 import { PIECE_SHAPES, pieceSvgMarkup, strokeForSize } from './pieceShapes';
+import { BoardSquare } from './Square';
+import { readFileSync } from 'node:fs';
 
 const tr = (lang: Language): Translate => (key, vars) => translate(lang, key, vars);
 const t = tr('en');
@@ -136,15 +138,16 @@ describe('describe', () => {
 });
 
 describe('pieces', () => {
-  it('has six shapes, white outlined and black solid, drawn with theme tokens', () => {
+  it('has six shapes, white filled light and black filled dark in both themes, outlined in foreground', () => {
     expect(Object.keys(PIECE_SHAPES).sort()).toEqual(['b', 'k', 'n', 'p', 'q', 'r']);
     const { container, rerender } = render(<PieceIcon type="n" color="w" />);
     const body = container.querySelector('path')!;
-    expect(body.getAttribute('fill')).toBe('hsl(var(--background))');
+    expect(body.getAttribute('fill')).toBe('hsl(var(--zhess-ink-light))');
     expect(body.getAttribute('stroke')).toBe('hsl(var(--foreground))');
     expect(container.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
     rerender(<PieceIcon type="n" color="b" title="black knight" />);
-    expect(container.querySelector('path')!.getAttribute('fill')).toBe('hsl(var(--foreground))');
+    expect(container.querySelector('path')!.getAttribute('fill')).toBe('hsl(var(--zhess-ink-dark))');
+    expect(container.querySelector('path')!.getAttribute('stroke')).toBe('hsl(var(--foreground))');
     expect(screen.getByRole('img', { name: 'black knight' })).toBeInTheDocument();
   });
 
@@ -157,6 +160,35 @@ describe('pieces', () => {
     expect(svg).toMatch(/^<svg xmlns="http:\/\/www.w3.org\/2000\/svg"/);
     expect(svg).toContain('fill="#0d0d0d"');
     expect(svg).toContain('width="64"');
+  });
+});
+
+describe('square tones', () => {
+  const css = readFileSync('src/index.css', 'utf8');
+  const block = (selector: string) => css.slice(css.indexOf(`${selector} {`), css.indexOf('}', css.indexOf(`${selector} {`)));
+
+  it('light squares are the lighter ones in both themes: the foreground step moves to the light squares in dark', () => {
+    expect(block(':root, .light')).toMatch(/--zhess-sq-light: transparent;[\s\S]*--zhess-sq-dark: hsl\(var\(--foreground\) \/ 0\.1\);/);
+    expect(block('.dark')).toMatch(/--zhess-sq-light: hsl\(var\(--foreground\) \/ 0\.1\);[\s\S]*--zhess-sq-dark: transparent;/);
+    expect(block(':root, .light')).toMatch(/--zhess-ink-light: var\(--background\)/);
+    expect(block('.dark')).toMatch(/--zhess-ink-light: var\(--foreground\)/);
+  });
+
+  it('the last-move and selection fills are half the checker step, so a highlighted square never matches the other color', () => {
+    const tones = (light: boolean, state: { lastMove?: boolean; selected?: boolean }) => {
+      const { container, unmount } = render(<BoardSquare square="e2" piece={null} light={light} label="e2" focusable={false} {...state} />);
+      const bg = (container.firstElementChild as HTMLElement).style.backgroundImage;
+      unmount();
+      return bg;
+    };
+    for (const light of [true, false]) {
+      expect(tones(light, {})).toContain(`var(--zhess-sq-${light ? 'light' : 'dark'})`);
+      for (const state of [{ lastMove: true }, { selected: true }]) {
+        const bg = tones(light, state);
+        expect(bg).toContain('hsl(var(--foreground) / 0.05)');
+        expect(bg).not.toMatch(/--foreground\) \/ 0\.(1|15)\)/);
+      }
+    }
   });
 });
 
