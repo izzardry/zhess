@@ -10,13 +10,13 @@ import zhess, { legalMoves, parseTc } from '@/lib/zhess';
 
 /**
  * Modes that can be started in this build. Milestone 2 turned `computer` on (behind
- * `flags.computer`); milestone 3 turns on `room`. Until then the Start pill answers a mode that
+ * `flags.computer`); milestone 3 turned on `room` (behind `flags.rooms`). The Start pill answers a mode that
  * is off with a `Coming soon` toast (PLAN Integrator 1).
  */
 export const PLAYABLE_MODES: Readonly<Record<Mode, boolean>> = {
   local: true,
   computer: flags.computer,
-  room: false,
+  room: flags.rooms,
 };
 
 /** Duration of the start ⇄ game blur transition (Ztyle 07, Zudoku). */

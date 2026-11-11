@@ -1,12 +1,16 @@
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createStore, memoryStorage } from '@/lib/storage';
+import { createMemoryNetwork } from '@/lib/transport';
 import type { SavedGame, Store } from '@/lib/types';
 import { parseUrl } from '@/lib/url';
 import zhess from '@/lib/zhess';
-import { useGameState } from './useGameState';
+import { useGameState, type UseGameStateOptions } from './useGameState';
+
+/** Rooms never touch the network here: no broker, no manual exchange, no tab guard. */
+const OFFLINE_ROOM: UseGameStateOptions['room'] = { broker: null, manualEnabled: false, locks: null, turnStorage: null, window: null, document: null };
 
 const SCHOLAR = ['e2e4', 'e7e5', 'f1c4', 'b8c6', 'd1h5', 'g8f6', 'h5f7'];
 const BASE = 'https://example.test/zhess/';
@@ -21,12 +25,12 @@ function seq(...values: number[]) {
   return () => values[i++ % values.length];
 }
 
-function setup(initial = '/', rng = seq(0.1)) {
+function setup(initial = '/', rng = seq(0.1), room: UseGameStateOptions['room'] = OFFLINE_ROOM, st: Store = store) {
   const wrapper = ({ children }: { children: ReactNode }) =>
     createElement(MemoryRouter, { initialEntries: [initial] }, children);
   return renderHook(
     () => ({
-      gs: useGameState({ store, now, rng, baseUrl: BASE }),
+      gs: useGameState({ store: st, now, rng, baseUrl: BASE, room }),
       loc: useLocation(),
       navigate: useNavigate(),
     }),
@@ -285,9 +289,13 @@ describe('resume, reload and the 15-second rule', () => {
     expect(result.current.gs.startPill.label).toBe('resume');
     act(() => result.current.gs.setOpponent({ mode: 'room' }));
     expect(result.current.gs.startPill.label).toBe('start');
+    // ROOM's Start opens the room of the code; Back leaves it.
     act(() => {
-      expect(result.current.gs.start()).toBe(false);
+      expect(result.current.gs.start()).toBe(true);
     });
+    expect(result.current.gs.room?.code).toBe('RES001');
+    act(() => result.current.gs.exit());
+    expect(result.current.gs.room).toBeNull();
     act(() => result.current.gs.setOpponent({ mode: 'local' }));
 
     act(() => void result.current.gs.start());
@@ -361,10 +369,13 @@ describe('resume, reload and the 15-second rule', () => {
     expect(result.current.gs.phase).toBe('review');
     expect(result.current.gs.reviewCursor).toBe(7);
 
+    // An unfinished room game opens (reconnects) its room.
     const roomGame: SavedGame = { ...rec, id: 'ROOM01.1', code: 'ROOM01', mode: 'room', result: undefined, by: undefined };
     act(() => {
-      expect(result.current.gs.open(roomGame)).toBe(false);
+      expect(result.current.gs.open(roomGame)).toBe(true);
     });
+    expect(result.current.gs.room?.code).toBe('ROOM01');
+    expect(result.current.gs.session).toMatchObject({ mode: 'room', code: 'ROOM01' });
   });
 });
 
@@ -513,16 +524,20 @@ describe('shared links', () => {
     expect(stored('SHR004')).toBeDefined();
   });
 
-  it('a room invite preselects ROOM and the code and waits to be started', () => {
-    const { result } = setup('/?s=room42&o=r&p=1');
+  it('a room invite preselects ROOM and the code and opens the room at once (DESIGN 4.1)', () => {
+    const { result } = setup('/?s=room42&o=r');
     const gs = result.current.gs;
-    expect(gs.phase).toBe('start');
+    expect(gs.phase).toBe('playing');
     expect(gs.opponent).toEqual({ mode: 'room' });
     expect(gs.code).toBe('ROOM42');
-    expect(gs.invite).toBe('ROOM42');
-    act(() => result.current.gs.consumeInvite());
-    expect(result.current.gs.invite).toBeNull();
-    expect(url(result)).toEqual({ code: 'ROOM42', mode: 'room' });
+    expect(gs.room?.code).toBe('ROOM42');
+    // The address bar says the code only (DESIGN 13.2).
+    expect(url(result)).toEqual({ code: 'ROOM42', playing: true, mode: 'room' });
+    act(() => result.current.gs.exit());
+    expect(result.current.gs.phase).toBe('start');
+    // The start screen with ROOM selected is not an invite link: `o` stays out.
+    expect(url(result)).toEqual({ code: 'ROOM42' });
+    expect(result.current.gs.shareUrl()).toBe(`${BASE}#/?s=ROOM42&o=r`);
   });
 
   it('shareUrl gives the full URL in a game and the settings on the start screen', () => {
@@ -544,5 +559,201 @@ describe('shared links', () => {
     act(() => void result.current.gs.start());
     expect(url(result).offer).toBe('OFFER');
     expect(url(result).playing).toBe(true);
+  });
+});
+
+describe('rooms (the controller owns the game; useGameState only reads it)', () => {
+  /** Two devices with their own stores, joined by one memory broker (PLAN 7: no PeerJS here). */
+  function twoDevices() {
+    const net = createMemoryNetwork();
+    const room = { ...OFFLINE_ROOM, broker: net.factory };
+    const storeA = createStore(memoryStorage());
+    const storeB = createStore(memoryStorage());
+    return { net, room, storeA, storeB };
+  }
+
+  const live = (r: R) => !!r.current.gs.room?.state?.live;
+
+  it('Start with ROOM creates the room; an invite link joins it; moves cross; the URL never carries them', async () => {
+    const { room, storeA, storeB } = twoDevices();
+    const a = setup('/?s=RMA001&o=l', seq(0.1), room, storeA);
+    act(() => a.result.current.gs.setColorChoice('w'));
+    act(() => a.result.current.gs.setTc(null));
+    act(() => a.result.current.gs.setOpponent({ mode: 'room' }));
+    act(() => {
+      expect(a.result.current.gs.start()).toBe(true);
+    });
+    const ra = a.result;
+    // The creator's open room is stored at once (seat 0) and shows in history (DESIGN 9.2, 3C).
+    await waitFor(() => expect(storeA.rooms()).toHaveLength(1));
+    expect(storeA.rooms()[0]).toMatchObject({ code: 'RMA001', seat: 0, lastSeenAt: 0 });
+    expect(storeA.games().map((g) => g.id)).toEqual(['RMA001.1']);
+    expect(url(ra)).toEqual({ code: 'RMA001', playing: true, mode: 'room' });
+
+    const b = setup('/?s=RMA001&o=r', seq(0.1), room, storeB);
+    const rb = b.result;
+    await waitFor(() => expect(live(ra) && live(rb)).toBe(true), { timeout: 5000 });
+    expect(rb.current.gs.session).toMatchObject({ mode: 'room', code: 'RMA001', color: 'b', id: 'RMA001.1' });
+    expect(ra.current.gs.session?.color).toBe('w');
+    expect(storeB.rooms()[0]).toMatchObject({ code: 'RMA001', seat: 1 });
+
+    // Only the side to move may move; the move goes to the controller and crosses.
+    act(() => {
+      expect(rb.current.gs.move('e7e5')).toBe(false);
+    });
+    expect(ra.current.gs.isPlayerTurn).toBe(true);
+    act(() => {
+      expect(ra.current.gs.move('e2e4')).toBe(true);
+    });
+    await waitFor(() => expect(rb.current.gs.view?.cursor).toBe(1));
+    expect(rb.current.gs.isPlayerTurn).toBe(true);
+    act(() => {
+      expect(rb.current.gs.move('e7e5')).toBe(true);
+    });
+    await waitFor(() => expect(ra.current.gs.view?.cursor).toBe(2));
+    expect(url(ra).moves).toBeUndefined();
+    expect(url(rb).moves).toBeUndefined();
+    expect(ra.current.gs.shareUrl()).toBe(`${BASE}#/?s=RMA001&o=r`);
+    // Saved by the controller with the room's game number.
+    expect(storeA.games()[0]).toMatchObject({ id: 'RMA001.1', mode: 'room', room: { n: 1, epoch: 0 } });
+
+    // Undo is a takeback request; redo does nothing in a room.
+    expect(ra.current.gs.undoRule).toBe('request');
+    expect(ra.current.gs.canRedo).toBe(false);
+    act(() => {
+      expect(ra.current.gs.undo()).toBe(true);
+    });
+    await waitFor(() => expect(rb.current.gs.room?.state?.requests.incoming).toBe('takeback'));
+    act(() => {
+      expect(rb.current.gs.room!.reply('takeback', true)).toBe(true);
+    });
+    await waitFor(() => expect(ra.current.gs.view?.cursor).toBe(0));
+    expect(ra.current.gs.session?.room).toEqual({ n: 1, epoch: 1 });
+
+    // Review inside a room: a move-list jump, stepping, and back to live.
+    act(() => ra.current.gs.move('d2d4'));
+    await waitFor(() => expect(rb.current.gs.view?.cursor).toBe(1));
+    act(() => rb.current.gs.goto(0));
+    expect(rb.current.gs.phase).toBe('review');
+    expect(rb.current.gs.move('d7d5')).toBe(false);
+    act(() => rb.current.gs.step(1));
+    expect(rb.current.gs.phase).toBe('playing');
+
+    // Resign is final; the rematch swaps colors.
+    act(() => {
+      expect(rb.current.gs.resign()).toBe(true);
+    });
+    await waitFor(() => expect(ra.current.gs.isOver).toBe(true));
+    expect(ra.current.gs.room?.score).toEqual([1, 0]);
+    act(() => {
+      expect(ra.current.gs.room!.ask('rematch')).toBe(true);
+    });
+    await waitFor(() => expect(rb.current.gs.room?.state?.requests.incoming).toBe('rematch'));
+    act(() => {
+      rb.current.gs.room!.reply('rematch', true);
+    });
+    await waitFor(() => expect(ra.current.gs.session?.id).toBe('RMA001.2'));
+    expect(ra.current.gs.session?.color).toBe('b');
+    await waitFor(() => expect(rb.current.gs.session?.color).toBe('w'));
+
+    // Back leaves the room: the other side sees the opponent go.
+    act(() => ra.current.gs.exit());
+    expect(ra.current.gs.phase).toBe('start');
+    expect(ra.current.gs.code).toBe('RMA001');
+    await waitFor(() => expect(rb.current.gs.room?.state?.presence).not.toBe('connected'), { timeout: 5000 });
+
+    // Resuming the room game from history reconnects.
+    const current = storeA.games().find((g) => g.id === 'RMA001.2')!;
+    act(() => {
+      expect(ra.current.gs.open(current)).toBe(true);
+    });
+    expect(ra.current.gs.room?.code).toBe('RMA001');
+    await waitFor(() => expect(live(ra) && live(rb)).toBe(true), { timeout: 5000 });
+
+    // An older, finished game of the room opens in review without connecting.
+    act(() => ra.current.gs.exit());
+    const first = storeA.games().find((g) => g.id === 'RMA001.1')!;
+    act(() => {
+      expect(ra.current.gs.open(first)).toBe(true);
+    });
+    expect(ra.current.gs.room).toBeNull();
+    expect(ra.current.gs.phase).toBe('review');
+    a.unmount();
+    b.unmount();
+  });
+
+  it('opening a room link while another room is open switches rooms; a solo link leaves the room', () => {
+    const r = setup('/?s=RMB001&o=r');
+    expect(r.result.current.gs.room?.code).toBe('RMB001');
+    act(() => r.result.current.navigate('/?s=RMB002&o=r', { replace: true }));
+    expect(r.result.current.gs.room?.code).toBe('RMB002');
+    // The same room with a manual-signalling `x` keeps the open room.
+    const before = r.result.current.gs.room;
+    act(() => r.result.current.navigate('/?s=RMB002&o=r&x=OFFER', { replace: true }));
+    expect(r.result.current.gs.room?.code).toBe('RMB002');
+    expect(r.result.current.gs.room?.controller).toBe(before?.controller);
+    act(() => r.result.current.navigate(`/?s=RMB003&p=1&o=l&m=${zhess.encodeMoves([{ m: 'e2e4', ms: 0 }])}`, { replace: true }));
+    expect(r.result.current.gs.room).toBeNull();
+    expect(r.result.current.gs.session).toMatchObject({ mode: 'local', code: 'RMB003' });
+    r.unmount();
+  });
+
+  it('with ROOM selected the preview shows the current game of that room', () => {
+    const game = zhess.play(zhess.newGame(), 'e2e4', 0);
+    const rec: SavedGame = {
+      id: 'RMC001.1',
+      code: 'RMC001',
+      mode: 'room',
+      color: 'w',
+      tc: null,
+      moves: zhess.encodeMoves(game.plies),
+      ms: [0],
+      assisted: false,
+      room: { n: 1, epoch: 0 },
+      createdAt: t,
+      lastPlayedAt: t,
+    };
+    store.saveGame(rec);
+    const r = setup('/?s=RMC001');
+    act(() => r.result.current.gs.setOpponent({ mode: 'room' }));
+    expect(r.result.current.gs.preview.cursor).toBe(1);
+    expect(r.result.current.gs.startPill.label).toBe('start');
+    r.unmount();
+  });
+
+  it('a finished room game reopens its room when it is the current game, else it opens in review', () => {
+    const mated = zhess.replay(SCHOLAR.map((m) => ({ m, ms: 0 })));
+    const rec = (n: number, finished: boolean): SavedGame => ({
+      id: `RMD001.${n}`,
+      code: 'RMD001',
+      mode: 'room',
+      color: 'w',
+      tc: null,
+      moves: zhess.encodeMoves(finished ? mated.plies : []),
+      ms: finished ? mated.plies.map(() => 0) : [],
+      ...(finished ? { result: '1-0' as const, by: 'mate' as const } : {}),
+      assisted: false,
+      room: { n, epoch: 0 },
+      createdAt: t,
+      lastPlayedAt: t + n,
+    });
+    store.saveRoom({ code: 'RMD001', key: 'k'.repeat(22), seat: 0, createdAt: t, lastSeenAt: t, score: [2, 0], games: ['RMD001.1'] });
+    store.saveGame(rec(1, true));
+    const r = setup('/');
+    act(() => {
+      expect(r.result.current.gs.open(rec(1, true))).toBe(true);
+    });
+    // The room's current game is over: the room opens (its overlay offers the rematch).
+    expect(r.result.current.gs.room?.code).toBe('RMD001');
+    act(() => r.result.current.gs.exit());
+    // Once game 2 exists, game 1 is history: read-only review, no room.
+    store.saveGame(rec(2, false));
+    act(() => {
+      expect(r.result.current.gs.open(rec(1, true))).toBe(true);
+    });
+    expect(r.result.current.gs.room).toBeNull();
+    expect(r.result.current.gs.phase).toBe('review');
+    expect(r.result.current.gs.shareUrl()).toBe(`${BASE}#/?s=RMD001&o=r`);
+    r.unmount();
   });
 });

@@ -96,4 +96,43 @@ describe('useSavedGames', () => {
     act(() => void window.dispatchEvent(new StorageEvent('storage', { key: 'zhess:games' })));
     expect(result.current.games.map((g) => g.id)).toEqual(['OTHER']);
   });
+
+  it('deleting a room game removes the room record too; undo puts both back (DESIGN 9.5)', () => {
+    const room = { code: 'RM0001', key: 'k'.repeat(22), seat: 1 as const, createdAt: NOW, lastSeenAt: NOW, score: [2, 0] as [number, number], games: ['RM0001.1', 'RM0001.2'] };
+    store.saveRoom(room);
+    store.saveGame(game('RM0001.1', NOW - 2, { code: 'RM0001', mode: 'room', result: '1-0', by: 'resign', room: { n: 1, epoch: 0 } }));
+    store.saveGame(game('RM0001.2', NOW - 1, { code: 'RM0001', mode: 'room', room: { n: 2, epoch: 0 } }));
+    const { result } = renderHook(() => useSavedGames({ store }));
+    expect(result.current.rooms).toEqual([room]);
+
+    let removed: SavedGame | undefined;
+    act(() => {
+      removed = result.current.remove('RM0001.2');
+    });
+    expect(removed?.id).toBe('RM0001.2');
+    expect(store.rooms()).toEqual([]);
+    expect(result.current.rooms).toEqual([]);
+    // The other game of the room stays in history.
+    expect(result.current.games.map((g) => g.id)).toEqual(['RM0001.1']);
+
+    act(() => result.current.restore(removed!));
+    expect(store.rooms()).toEqual([room]);
+    expect(result.current.rooms).toEqual([room]);
+    expect(result.current.games.map((g) => g.id)).toEqual(['RM0001.2', 'RM0001.1']);
+  });
+
+  it('undo does not overwrite a room started again under the same code', () => {
+    const old = { code: 'RM0002', key: 'a'.repeat(22), seat: 0 as const, createdAt: NOW, lastSeenAt: NOW, score: [0, 0] as [number, number], games: ['RM0002.1'] };
+    store.saveRoom(old);
+    store.saveGame(game('RM0002.1', NOW, { code: 'RM0002', mode: 'room', room: { n: 1, epoch: 0 } }));
+    const { result } = renderHook(() => useSavedGames({ store }));
+    let removed: SavedGame | undefined;
+    act(() => {
+      removed = result.current.remove('RM0002.1');
+    });
+    const fresh = { ...old, key: 'b'.repeat(22), lastSeenAt: 0 };
+    store.saveRoom(fresh);
+    act(() => result.current.restore(removed!));
+    expect(store.rooms()).toEqual([fresh]);
+  });
 });

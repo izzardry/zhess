@@ -205,6 +205,21 @@ async function settle(ms = 100) {
   await vi.advanceTimersByTimeAsync(ms);
 }
 
+/** The real `setTimeout`, captured before the fake timers are installed. */
+const realSetTimeout = globalThis.setTimeout;
+
+/**
+ * Advances fake time until `ok()` holds. Each round also yields one real macrotask, because the
+ * (de)compression streams behind the signal codec settle on real ticks, which a fixed fake advance
+ * does not wait for when the machine is busy.
+ */
+async function until(ok: () => boolean, rounds = 400) {
+  for (let i = 0; i < rounds && !ok(); i++) {
+    await vi.advanceTimersByTimeAsync(5);
+    await new Promise((r) => realSetTimeout(r, 1));
+  }
+}
+
 /** Runs fake time until the promise settles. */
 async function run<T>(p: Promise<T>): Promise<T> {
   let done = false;
@@ -476,7 +491,7 @@ describe('BroadcastChannel hand-over (answer link opened on the host device)', (
     const guest = await run(answerManualOffer(CODE, host.link, opts()));
     const ok = await run(handOverAnswer(CODE, guest.link, { BroadcastChannel: BC }));
     expect(ok).toBe(true);
-    await settle(50);
+    await until(() => host.transport.state === 'open' && guest.transport.state === 'open');
     expect(host.transport.state).toBe('open');
     expect(guest.transport.state).toBe('open');
     // The paste path then reports the offer as used.

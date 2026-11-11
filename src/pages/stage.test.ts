@@ -14,7 +14,7 @@ const MATE = ['e2e4', 'e7e5', 'f1c4', 'b8c6', 'd1h5', 'g8f6', 'h5f7'];
 
 describe('stage helpers', () => {
   it('pass-and-play and the computer are playable in milestone 2', () => {
-    expect(PLAYABLE_MODES).toEqual({ local: true, computer: true, room: false });
+    expect(PLAYABLE_MODES).toEqual({ local: true, computer: true, room: true });
   });
 
   it('orients white at the bottom in pass-and-play, else the player side', () => {

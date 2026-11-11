@@ -1,7 +1,7 @@
 /**
  * The integrated stage (Integrator 1): start ⇄ game, pass-and-play, undo/redo, hidden chrome,
- * resign with undo, game over, history, review, continue from here and the Coming-soon room mode.
- * Computer mode is covered by Index.computer.test.tsx.
+ * resign with undo, game over, history, review and continue from here.
+ * Computer mode is covered by Index.computer.test.tsx, room mode by Index.room.test.tsx.
  * The real browser paths (drag, dial, reload, share) are covered by e2e/m1.spec.ts.
  */
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -82,19 +82,6 @@ describe('Index stage', () => {
     expect(screen.getByTestId('board-preview').firstElementChild).toHaveAttribute('data-blurred', 'true');
     // Default opponent: COMPUTER 5 MEDIUM (DESIGN 4.1).
     expect(screen.getByText('Medium')).toBeInTheDocument();
-  });
-
-  it('answers ROOM with Coming soon until milestone 3', async () => {
-    renderStage('/?o=r');
-    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
-    expect(await screen.findByText('Coming soon')).toBeInTheDocument();
-    expect(stage()).toHaveAttribute('data-phase', 'start');
-  });
-
-  it('answers a room invite link with Coming soon', async () => {
-    renderStage('/?s=K7QW2M&o=r&p=1');
-    expect(await screen.findByText('Coming soon')).toBeInTheDocument();
-    expect(stage()).toHaveAttribute('data-phase', 'start');
   });
 
   it('plays pass-and-play with undo and redo from the toolbar and the keyboard', () => {

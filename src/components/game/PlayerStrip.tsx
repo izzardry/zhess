@@ -18,6 +18,8 @@ export interface StripClock {
   untimed?: boolean;
   /** Remaining (timed) or used (clock off) ms behind `text`; exposed as `data-ms` for tests. */
   ms?: number;
+  /** A short word beside the time, e.g. `Paused` in a timed room while disconnected (DESIGN 9.6). */
+  note?: string;
 }
 
 export interface PlayerStripProps {
@@ -98,7 +100,7 @@ export function PlayerStrip({
     </div>
   );
 
-  const time = clock && (
+  const timer = clock && (
     <span
       role="timer"
       aria-label={clock.untimed ? t('game.timeUsed', { side }) : t('game.clock', { side })}
@@ -118,6 +120,17 @@ export function PlayerStrip({
       {clock.text}
     </span>
   );
+  const time =
+    clock && clock.note ? (
+      <span className={cn('flex items-center gap-1.5 shrink-0', rail && 'flex-col gap-0.5')}>
+        <span data-part="note" className="text-[10px] leading-4 uppercase tracking-wider text-muted-foreground">
+          {clock.note}
+        </span>
+        {timer}
+      </span>
+    ) : (
+      timer
+    );
 
   return (
     <div
