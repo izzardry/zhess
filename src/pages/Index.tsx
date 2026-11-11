@@ -11,7 +11,10 @@
  * | review         | sharp, read-only           | as playing, toolbar with stepping controls            |
  * | overlay        | behind the scrim           | game-over overlay, tutorial, donation                 |
  *
- * Game state lives in `useGameState` (package 1B); this file only wires packages together.
+ * Game state lives in `useGameState` (package 1B); this file only wires packages together:
+ * the computer opponent (`useComputer`, `useEngineStart`), the clock and premoves (`useClock`,
+ * `usePremove`), the hint bulb (`useHint`), the blunder guard (`useBlunderGuard`) and draw offers
+ * to the computer (`askComputerDraw`) all share the one engine of `useZhessEngine`.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from 'react';
 import { toast } from 'sonner';
@@ -20,6 +23,7 @@ import {
   GameOverOverlay,
   InfoPill,
   PageTint,
+  TINT_MS,
   PieceRenderProvider,
   PlayerStrip,
   ResignUndoToast,
@@ -42,19 +46,26 @@ import {
   SupportButton,
   TutorialOverlay,
 } from '@/components/platform';
-import { BoardPreview, StartChrome, StartPill, useScrolled } from '@/components/start';
+import { BoardPreview, ClockDial, StartChrome, StartPill, useScrolled, type ClockPillAnchor } from '@/components/start';
 import { useIsMobileLandscape } from '@/hooks/use-orientation';
-import { useDonationPrompt } from '@/hooks/useDonationPrompt';
+import { useBlunderGuard } from '@/hooks/useBlunderGuard';
+import { useClock, usePremove } from '@/hooks/useClock';
+import { useComputer, useEngineStart } from '@/hooks/useComputer';
+import { DONATION_DELAY_MS, useDonationPrompt } from '@/hooks/useDonationPrompt';
 import { useGameState } from '@/hooks/useGameState';
 import { useHelpers } from '@/hooks/useHelpers';
+import { useHint } from '@/hooks/useHint';
+import { useZhessEngine } from '@/hooks/useZhessEngine';
 import { usePWAInstall } from '@/hooks/usePWAInstall';
 import { useSavedGames } from '@/hooks/useSavedGames';
 import { useSeating } from '@/hooks/useSeating';
 import { useSWUpdate } from '@/hooks/useSWUpdate';
 import { useTutorial } from '@/hooks/useTutorial';
+import { askComputerDraw } from '@/lib/drawOffer';
 import { flags } from '@/lib/flags';
-import { gameFromSaved, opponentOf } from '@/lib/gameRecord';
+import { DEFAULT_LEVEL, gameFromSaved, opponentOf } from '@/lib/gameRecord';
 import { useI18n } from '@/lib/i18n';
+import { bankTurn, bankedTurnMs } from '@/lib/turnBank';
 import type { Color, Opponent, SavedGame, Square, TimeControl } from '@/lib/types';
 import { appBaseUrl } from '@/lib/url';
 import { cn } from '@/lib/utils';
@@ -70,7 +81,7 @@ import {
   canContinueFrom,
   other,
   pgnMeta,
-  stripClock,
+  reviewClockView,
   totalTime,
 } from './stage';
 
@@ -97,11 +108,16 @@ export default function Index() {
   const { shouldShowPrompt, canInstall, install, dismiss: dismissInstall } = usePWAInstall();
   const { showTutorial, startTutorial, forceShowTutorial, completeTutorial } = useTutorial();
   const { showPrompt: showDonation, triggerPrompt: triggerDonation, dismissPrompt: dismissDonation } = useDonationPrompt();
+  const engine = useZhessEngine();
 
   const { phase, session, view } = gs;
   const isStart = phase === 'start';
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+  const gsRef = useRef(gs);
+  gsRef.current = gs;
   const { checkForUpdate } = useSWUpdate({ shouldAutoReload: () => phaseRef.current === 'start' });
 
   const scrolled = useScrolled(50, isStart);
@@ -144,11 +160,14 @@ export default function Index() {
     if (ended && !prev.ended) {
       setOverlay(true);
       setEndedHere(true);
+      // The one-time donation prompt follows the first win, 1.5 s after the overlay (DESIGN 8.4).
+      const s = sessionRef.current;
+      if (s?.game.end && outcomeFor(s.game.end, s.mode, s.color) === 'win') triggerDonation(TINT_MS + DONATION_DELAY_MS);
     } else if (!ended) {
       setOverlay(false);
       setEndedHere(false);
     }
-  }, [sessionId, ended]);
+  }, [sessionId, ended, triggerDonation]);
 
   /* ---- resign with a 5-second undo (DESIGN 8.3) ---- */
   const [resigned, setResigned] = useState<'you' | Color | null>(null);
@@ -156,23 +175,112 @@ export default function Index() {
     if (!ended) setResigned(null);
   }, [ended]);
 
-  /* ---- live clock / time-used display ---- */
-  const [, setTick] = useState(0);
-  const live = phase === 'playing' && !!session && !session.game.end;
-  useEffect(() => {
-    if (!live) return;
-    const id = setInterval(() => setTick((n) => n + 1), session?.tc ? 100 : 1000);
-    return () => clearInterval(id);
-  }, [live, session?.tc]);
-
-  // A timed solo game ends when the clock of the side to move reaches zero (DESIGN 8.2, 11).
-  const liveMs = live ? gs.turnElapsed() : 0;
+  /* ---- the chess clock (DESIGN 11): performance.now() stamps, paused on Back / hidden tab ---- */
+  const sessionGame = session?.game ?? null;
   const { timeout } = gs;
-  const flaggedNow =
-    live && session && session.tc ? stripClock(session.game, session.tc, session.game.turn, true, liveMs).ms <= 0 : false;
+  // Time already spent on this turn before a reload or Back → Resume (lib/turnBank).
+  const banked = useRef<{ id: string | null; ms: number }>({ id: null, ms: 0 });
+  if (banked.current.id !== sessionId) {
+    banked.current = { id: sessionId, ms: session && session.mode !== 'room' ? bankedTurnMs(session.id, session.game) : 0 };
+  }
+  const clock = useClock(sessionGame, session?.tc ?? null, {
+    active: phase === 'playing',
+    key: sessionId,
+    onFlag: timeout,
+    initialTurnMs: banked.current.ms,
+  });
+  const clockRef = useRef(clock);
+  clockRef.current = clock;
+
+  /** Keeps the running turn's time for a reload or a later resume. */
+  const bankNow = useCallback(() => {
+    const s = sessionRef.current;
+    if (!s || s.mode === 'room' || s.game.end) return;
+    bankTurn(s.id, s.game, clockRef.current.elapsed());
+  }, []);
   useEffect(() => {
-    if (flaggedNow && session) timeout(session.game.turn);
-  }, [flaggedNow, session, timeout]);
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') bankNow();
+    };
+    window.addEventListener('pagehide', bankNow);
+    document.addEventListener('visibilitychange', onHide);
+    return () => {
+      window.removeEventListener('pagehide', bankNow);
+      document.removeEventListener('visibilitychange', onHide);
+    };
+  }, [bankNow]);
+
+  /* ---- engine trouble: one calm toast (DESIGN 10.1) ---- */
+  const engineFailed = useCallback(
+    (retry?: () => void) => {
+      const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+      toast(t(offline ? 'engine.failedOffline' : 'engine.failed'), {
+        id: 'engine-failed',
+        action: retry ? { label: t('engine.retry'), onClick: retry } : undefined,
+      });
+    },
+    [t],
+  );
+
+  /* ---- the computer's turn (DESIGN 10) ---- */
+  const mode = session?.mode ?? 'local';
+  const computerRetry = useRef<() => void>(() => {});
+  const computer = useComputer({
+    engine,
+    game: sessionGame,
+    enabled: flags.computer && mode === 'computer' && phase === 'playing',
+    computerColor: session ? other(session.color) : null,
+    level: session?.level ?? DEFAULT_LEVEL,
+    tc: session?.tc ?? null,
+    onMove: (uci, ms) => void gsRef.current.move(uci, ms),
+    onFail: () => engineFailed(() => computerRetry.current()),
+    elapsed: clock.elapsed,
+    sessionKey: sessionId,
+  });
+  computerRetry.current = computer.retry;
+
+  /* ---- premove in timed games against the computer (DESIGN 6.3); it bypasses the guard ---- */
+  const premove = usePremove(sessionGame, {
+    player: session?.color ?? 'w',
+    mode,
+    tc: session?.tc ?? null,
+    live: phase === 'playing',
+    key: sessionId,
+    onFire: (uci) => void gsRef.current.move(uci, clockRef.current.elapsed()),
+  });
+
+  /* ---- hint bulb (DESIGN 7.3) ---- */
+  const hintEnabled =
+    flags.hint && (mode === 'computer' || mode === 'local') && phase === 'playing' && gs.isPlayerTurn;
+  const hint = useHint({
+    engine,
+    game: sessionGame,
+    enabled: hintEnabled,
+    onAssisted: gs.markAssisted,
+    onFail: () => engineFailed(),
+    sessionKey: sessionId,
+  });
+
+  /* ---- blunder guard: against the computer, helpers on (DESIGN 7.2) ---- */
+  const guard = useBlunderGuard({
+    engine,
+    game: sessionGame,
+    enabled: flags.blunderGuard && mode === 'computer' && helpers && phase === 'playing',
+    playerColor: session?.color ?? null,
+  });
+  const guardRef = useRef(guard);
+  guardRef.current = guard;
+
+  /* ---- screen-reader notes of the assistance (hint squares, refused blunder) ---- */
+  const [assistNote, setAssistNote] = useState('');
+  const hintSquares = hint.squares;
+  const hintStep = hint.step;
+  useEffect(() => {
+    if (!hintSquares?.[0]) return;
+    setAssistNote(t(hintStep === 2 ? 'assist.hintTo' : 'assist.hintFrom', { square: hintSquares[0] }));
+  }, [hintSquares, hintStep, t]);
+  const liveFen = sessionGame?.fen;
+  useEffect(() => setAssistNote(''), [liveFen]);
 
   /* ---- settings shown on the start screen (dimmed: the stored game's own) ---- */
   const pillSaved = gs.startPill.saved;
@@ -193,18 +301,34 @@ export default function Index() {
     [animate],
   );
 
-  const handleStart = useCallback(() => {
-    const label = gs.startPill.label;
+  /* ---- Start: a computer game waits for the engine (spinner with progress, DESIGN 10.1) ---- */
+  const engineStart = useEngineStart(engine, { onFail: () => engineFailed(() => void handleStartRef.current()) });
+  const { cancel: cancelEngineStart } = engineStart;
+  useEffect(() => {
+    if (!isStart) cancelEngineStart();
+  }, [isStart, cancelEngineStart]);
+
+  const handleStart = useCallback(async () => {
+    const pill = gs.startPill;
+    const label = pill.label;
     if (label === 'start' && !PLAYABLE_MODES[gs.opponent.mode]) {
       comingSoon();
       return;
     }
-    if (!begin(gs.start)) {
+    const target = pill.saved ? opponentOf(pill.saved) : gs.opponent;
+    if (label !== 'review' && target.mode === 'computer') {
+      if (!(await engineStart.prepare())) return;
+      // The player went elsewhere meanwhile (a history card, a link).
+      if (phaseRef.current !== 'start') return;
+    }
+    if (!begin(gsRef.current.start)) {
       comingSoon();
       return;
     }
     if (label === 'start') startTutorial();
-  }, [gs.startPill.label, gs.opponent.mode, gs.start, begin, comingSoon, startTutorial]);
+  }, [gs.startPill, gs.opponent, engineStart, begin, comingSoon, startTutorial]);
+  const handleStartRef = useRef(handleStart);
+  handleStartRef.current = handleStart;
 
   const handleOpen = useCallback(
     (g: SavedGame) => {
@@ -216,8 +340,10 @@ export default function Index() {
   const handleExit = useCallback(() => {
     animate();
     setResigned(null);
+    // The clock pauses on Back and resumes with this turn's time on return (DESIGN 11).
+    bankNow();
     gs.exit();
-  }, [animate, gs]);
+  }, [animate, gs, bankNow]);
 
   const handleNewGame = useCallback(() => {
     setOverlay(false);
@@ -252,7 +378,44 @@ export default function Index() {
     if (!begin(gs.continueFromHere)) comingSoon();
   }, [begin, gs, comingSoon]);
 
-  const handleMove = useCallback((uci: string) => void gs.move(uci), [gs]);
+  /** A move made on the board: through the blunder guard against the computer, else at once. */
+  const handleMove = useCallback(
+    (uci: string) => {
+      const g = guardRef.current;
+      if (!g.active) {
+        gsRef.current.move(uci, clockRef.current.elapsed());
+        return;
+      }
+      void g.check(uci).then((r) => {
+        if (r.action === 'commit') gsRef.current.move(uci, clockRef.current.elapsed());
+        else if (r.action === 'refuse') setAssistNote(t('assist.blunderRefused'));
+      });
+    },
+    [t],
+  );
+
+  /* ---- draw offer to the computer: accepted past move 30 at ±0.3, else `Declined` (DESIGN 8.3) ---- */
+  const drawAsked = useRef(false);
+  const handleOfferDraw = useCallback(() => {
+    const s = sessionRef.current;
+    if (!s || s.mode !== 'computer' || s.game.end || drawAsked.current) return;
+    drawAsked.current = true;
+    const g = s.game;
+    void askComputerDraw(engine, g).then((answer) => {
+      drawAsked.current = false;
+      const cur = sessionRef.current;
+      if (!cur || cur.id !== s.id || cur.game.end) return;
+      if (answer === 'accept' && cur.game === g) gsRef.current.finish({ result: '1/2-1/2', by: 'agreed' });
+      else toast(t('assist.drawDeclined'));
+    });
+  }, [engine, t]);
+
+  /* ---- custom time control: the clock pill's 500 ms hold opens the dial (DESIGN 4.1) ---- */
+  const [dial, setDial] = useState<{ x: number; y: number; dragging: boolean } | null>(null);
+  const openDial = useCallback((a: ClockPillAnchor) => setDial({ x: a.x, y: a.y, dragging: a.source === 'pointer' }), []);
+  useEffect(() => {
+    if (!isStart) setDial(null);
+  }, [isStart]);
 
   /* ---- invite links (rooms come in milestone 3) ---- */
   const { invite, consumeInvite } = gs;
@@ -263,8 +426,6 @@ export default function Index() {
   }, [invite, consumeInvite, comingSoon]);
 
   /* ---- keyboard: Z / Shift+Z undo and redo; ← / → step in review (DESIGN 6.1, 12.3) ---- */
-  const gsRef = useRef(gs);
-  gsRef.current = gs;
   useEffect(() => {
     if (isStart) return;
     const onKey = (e: KeyboardEvent) => {
@@ -308,6 +469,11 @@ export default function Index() {
   /* ---- tap on empty stage toggles the chrome (DESIGN 4) ---- */
   const onStageClick = (e: MouseEvent<HTMLDivElement>) => {
     if (isStart || e.target !== e.currentTarget) return;
+    // "Tapping anywhere cancels it" (DESIGN 6.3): the first tap only drops a queued premove.
+    if (premove.premove) {
+      premove.cancel();
+      return;
+    }
     setShowUI((v) => !v);
   };
 
@@ -315,7 +481,6 @@ export default function Index() {
   const boardGame = isStart || !view ? gs.preview : view;
   const orientation: Color = session ? (flipped ? other(baseOrientation(session)) : baseOrientation(session)) : 'w';
   const farColor = other(orientation);
-  const mode = session?.mode ?? 'local';
   const faceToFace = !!session && mode === 'local' && seating === 'face' && phase === 'playing';
   const interactive = phase === 'playing' && !!session && !session.game.end && mode !== 'room';
   const movable = mode === 'local' ? 'both' : (session?.color ?? 'none');
@@ -324,6 +489,11 @@ export default function Index() {
   const cellSize = landscape ? CELL_SIZE_LANDSCAPE : CELL_SIZE_PORTRAIT;
 
   const mat = useMemo(() => (view ? material(view) : null), [view]);
+  const reviewFaces = useMemo(
+    () => (phase === 'review' && view && session ? reviewClockView(view, session.tc) : null),
+    [phase, view, session],
+  );
+  const faces = reviewFaces ?? clock;
   const sans = useMemo(() => (session ? allSan(session.game) : []), [session]);
   const strip = (color: Color, rotated: boolean, layout: 'row' | 'rail') =>
     session && view && mat ? (
@@ -331,7 +501,7 @@ export default function Index() {
         color={color}
         captured={mat.captured[color]}
         advantage={color === 'w' ? mat.diff : -mat.diff}
-        clock={stripClock(view, session.tc, color, live, liveMs)}
+        clock={faces[color]}
         active={!view.end && view.turn === color}
         rotated={rotated}
         details={showUI}
@@ -355,16 +525,21 @@ export default function Index() {
   ) : null;
 
   const peekColor: Color | null = session ? (mode === 'local' ? other(session.game.turn) : other(session.color)) : null;
-  const hint =
+  const hintControls =
     flags.hint && session && (mode === 'computer' || mode === 'local') && phase === 'playing'
       ? {
-          // The engine arrives in milestone 2; the threat peek is chess.js only and works now.
-          onHint: comingSoon,
+          // Tap: the engine's move (piece, then target). Hold 1 s: the threat peek (chess.js only).
+          onHint: hint.tap,
           onPeekStart: () => view && peekColor && setThreats(attacked(view, peekColor)),
           onPeekEnd: () => setThreats(null),
-          disabled: !!session.game.end,
+          busy: hint.pending,
+          disabled: !hintEnabled,
         }
       : undefined;
+  const highlights = useMemo(
+    () => ({ hint: hint.squares, threats: threats ?? undefined, blunder: guard.blunder, blunderKey: guard.blunderKey }),
+    [hint.squares, threats, guard.blunder, guard.blunderKey],
+  );
 
   const end = session?.game.end;
   const tint = end && endedHere && session ? tintFor(end, session.mode, session.color) : null;
@@ -384,6 +559,8 @@ export default function Index() {
           onClick={onStageClick}
           data-testid="stage"
           data-phase={phase}
+          data-engine={engine.state}
+          data-computer={computer.thinking ? 'thinking' : undefined}
           className={cn(
             'flex h-[100dvh] min-h-[320px] items-center justify-center',
             landscape
@@ -394,7 +571,15 @@ export default function Index() {
           <BoardPreview
             blurred={isStart}
             animate={animating}
-            overlay={<StartPill label={gs.startPill.label} onClick={handleStart} disabled={!isStart || animating} />}
+            overlay={
+              <StartPill
+                label={gs.startPill.label}
+                onClick={() => void handleStart()}
+                loading={engineStart.loading}
+                progress={engineStart.progress}
+                disabled={!isStart || animating}
+              />
+            }
             overlayVisible={isStart}
           >
             <div className="relative" onPointerDown={onSwipeDown} onPointerUp={onSwipeUp} onPointerCancel={() => (swipe.current = null)}>
@@ -406,7 +591,9 @@ export default function Index() {
                 interactive={interactive}
                 movable={movable}
                 seating={faceToFace ? 'face' : 'side'}
-                highlights={threats ? { threats } : undefined}
+                premove={premove.premove}
+                onPremove={premove.onPremove}
+                highlights={highlights}
                 onMove={handleMove}
                 announce={!isStart}
                 cellSize={cellSize}
@@ -457,13 +644,13 @@ export default function Index() {
               onRedo={phase === 'review' ? () => gs.step(1) : () => void gs.redo()}
               onUndoHold={gs.toStart}
               onRedoHold={gs.toEnd}
-              hint={hint}
+              hint={hintControls}
               helpers={helpers}
               onToggleHelpers={toggleHelpers}
               seating={mode === 'local' ? seating : undefined}
               onToggleSeating={mode === 'local' ? toggleSeating : undefined}
               onFlip={() => setFlipped((f) => !f)}
-              onOfferDraw={mode === 'local' ? undefined : comingSoon}
+              onOfferDraw={mode === 'computer' ? handleOfferDraw : mode === 'room' ? comingSoon : undefined}
               onResign={handleResign}
               flagDisabled={!!end}
               onContinue={canContinue ? handleContinue : undefined}
@@ -512,6 +699,7 @@ export default function Index() {
           onColorChange={gs.setColorChoice}
           clock={shownClock}
           onClockChange={(tc) => gs.setTc(formatTc(tc))}
+          onClockLongPress={openDial}
           settingsLocked={!!pillSaved}
           busy={animating}
           showChevron={saved.games.length > 0}
@@ -559,6 +747,25 @@ export default function Index() {
         {showTutorial && session && !isStart && (
           <TutorialOverlay onDismiss={completeTutorial} mode={session.mode} isLandscape={landscape} />
         )}
+
+        {dial && isStart && (
+          <ClockDial
+            x={dial.x}
+            y={dial.y}
+            dragging={dial.dragging}
+            value={shownClock}
+            onPick={(tc) => {
+              gs.setTc(tc);
+              setDial(null);
+            }}
+            onCancel={() => setDial(null)}
+          />
+        )}
+
+        {/* Screen-reader notes of the hint and the blunder guard (the guard shows no text, DESIGN 7.2). */}
+        <div aria-live="polite" aria-atomic className="sr-only" data-testid="assist-live">
+          {assistNote}
+        </div>
 
         <DonationPrompt open={showDonation} onDismiss={dismissDonation} />
       </div>

@@ -2,18 +2,20 @@
  * Pure helpers of the stage (pages/Index.tsx): what the board, strips, pill and overlay show for a
  * session. No React, no DOM, so they are unit-tested on their own.
  */
+import { clockView, type ClockView } from '@/lib/clock';
+import { flags } from '@/lib/flags';
 import type { GameSession } from '@/lib/gameRecord';
-import { formatClock, formatElapsed, isLowTime } from '@/lib/timeUtils';
-import type { Color, Game, Mode, PgnMeta, TimeControl } from '@/lib/types';
-import zhess, { clockRunning, legalMoves, parseTc } from '@/lib/zhess';
+import type { Color, Game, Mode, PgnMeta } from '@/lib/types';
+import zhess, { legalMoves, parseTc } from '@/lib/zhess';
 
 /**
- * Modes that can be started in this build. Milestone 2 turns `computer` on, milestone 3 `room`;
- * until then the Start pill answers them with a `Coming soon` toast (PLAN Integrator 1).
+ * Modes that can be started in this build. Milestone 2 turned `computer` on (behind
+ * `flags.computer`); milestone 3 turns on `room`. Until then the Start pill answers a mode that
+ * is off with a `Coming soon` toast (PLAN Integrator 1).
  */
 export const PLAYABLE_MODES: Readonly<Record<Mode, boolean>> = {
   local: true,
-  computer: false,
+  computer: flags.computer,
   room: false,
 };
 
@@ -66,33 +68,14 @@ export function canContinueFrom(g: Game): boolean {
   }
 }
 
-export interface StripClockView {
-  text: string;
-  running: boolean;
-  low: boolean;
-  flagged: boolean;
-  untimed: boolean;
-  /** Remaining (timed) or used (untimed) ms. */
-  ms: number;
-}
-
 /**
- * The strip's time slot for one side (DESIGN 4.2, 11): remaining time with a clock, else the time
- * used, dimmed. `liveMs` is what the side to move has spent on the running turn.
+ * The strips' clocks in review (DESIGN 12.3): both clocks as they stood at the shown move, not
+ * running. A finished game's review view carries the ending; before the last move it does not
+ * apply, so it is dropped there (otherwise the side to move at that point would read `0.0`).
  */
-export function stripClock(g: Game, tcString: string | null, color: Color, live: boolean, liveMs: number): StripClockView {
-  const tc: TimeControl = parseTc(tcString);
-  const base = zhess.clocks(g, tc)[color];
-  const toMove = live && g.turn === color && !g.end;
-  if (!tc) {
-    const ms = base + (toMove ? liveMs : 0);
-    return { text: formatElapsed(ms), running: false, low: false, flagged: false, untimed: true, ms };
-  }
-  const running = toMove && clockRunning(g);
-  const ms = Math.max(0, base - (running ? liveMs : 0));
-  // The flag falls on the side to move (DESIGN 11): at 0 the clock reads `0.0` in `destructive`.
-  const flagged = (g.end?.by === 'time' && g.turn === color) || ms <= 0;
-  return { text: formatClock(ms), running, low: isLowTime(ms), flagged, untimed: false, ms };
+export function reviewClockView(view: Game, tc: string | null): ClockView {
+  const g = view.end && view.cursor < view.plies.length ? { ...view, end: undefined } : view;
+  return clockView(g, parseTc(tc), 0, { live: false });
 }
 
 /** PGN headers for a session (English names; DESIGN 14: English letters in PGN). */

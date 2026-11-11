@@ -16,6 +16,8 @@ export interface StripClock {
   flagged?: boolean;
   /** Clock off: the slot shows the time this side used, dimmed (DESIGN 4.2). */
   untimed?: boolean;
+  /** Remaining (timed) or used (clock off) ms behind `text`; exposed as `data-ms` for tests. */
+  ms?: number;
 }
 
 export interface PlayerStripProps {
@@ -104,6 +106,7 @@ export function PlayerStrip({
       data-running={clock.running ? 'true' : undefined}
       data-low={clock.low ? 'true' : undefined}
       data-flagged={clock.flagged ? 'true' : undefined}
+      data-ms={typeof clock.ms === 'number' ? Math.round(clock.ms) : undefined}
       className={cn(
         'font-mono text-sm tabular-nums tracking-wider px-2 py-0.5 rounded-md shrink-0 transition-colors duration-fast',
         clock.untimed && 'text-muted-foreground',

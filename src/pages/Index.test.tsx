@@ -1,6 +1,7 @@
 /**
  * The integrated stage (Integrator 1): start ⇄ game, pass-and-play, undo/redo, hidden chrome,
- * resign with undo, game over, history, review, continue from here and the Coming-soon modes.
+ * resign with undo, game over, history, review, continue from here and the Coming-soon room mode.
+ * Computer mode is covered by Index.computer.test.tsx.
  * The real browser paths (drag, dial, reload, share) are covered by e2e/m1.spec.ts.
  */
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -83,8 +84,8 @@ describe('Index stage', () => {
     expect(screen.getByText('Medium')).toBeInTheDocument();
   });
 
-  it('answers COMPUTER and ROOM with Coming soon in milestone 1', async () => {
-    renderStage();
+  it('answers ROOM with Coming soon until milestone 3', async () => {
+    renderStage('/?o=r');
     fireEvent.click(screen.getByRole('button', { name: 'Start' }));
     expect(await screen.findByText('Coming soon')).toBeInTheDocument();
     expect(stage()).toHaveAttribute('data-phase', 'start');

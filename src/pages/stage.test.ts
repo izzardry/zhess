@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import zhess from '@/lib/zhess';
 import type { Game } from '@/lib/types';
 import { createSession } from '@/lib/gameRecord';
-import { allSan, baseOrientation, canContinueFrom, other, pgnMeta, PLAYABLE_MODES, stripClock, totalTime } from './stage';
+import { allSan, baseOrientation, canContinueFrom, other, pgnMeta, PLAYABLE_MODES, reviewClockView, totalTime } from './stage';
 
 function playAll(ucis: string[], ms = 1000): Game {
   let g = zhess.newGame();
@@ -13,8 +13,8 @@ function playAll(ucis: string[], ms = 1000): Game {
 const MATE = ['e2e4', 'e7e5', 'f1c4', 'b8c6', 'd1h5', 'g8f6', 'h5f7'];
 
 describe('stage helpers', () => {
-  it('only pass-and-play is playable in milestone 1', () => {
-    expect(PLAYABLE_MODES).toEqual({ local: true, computer: false, room: false });
+  it('pass-and-play and the computer are playable in milestone 2', () => {
+    expect(PLAYABLE_MODES).toEqual({ local: true, computer: true, room: false });
   });
 
   it('orients white at the bottom in pass-and-play, else the player side', () => {
@@ -47,22 +47,29 @@ describe('stage helpers', () => {
     expect(canContinueFrom(playAll(['e2e4']))).toBe(true);
   });
 
-  it('shows time used, dimmed, without a clock', () => {
+  it('review shows time used, dimmed, without a clock', () => {
     const g = playAll(['e2e4', 'e7e5', 'g1f3'], 61_000);
-    expect(stripClock(g, null, 'w', false, 0)).toMatchObject({ text: '2:02', untimed: true, running: false });
-    // Black is to move: the live turn adds to black's time.
-    expect(stripClock(g, null, 'b', true, 5_000).text).toBe('1:06');
-    expect(stripClock(g, null, 'w', true, 5_000).text).toBe('2:02');
+    expect(reviewClockView(g, null).w).toMatchObject({ text: '2:02', untimed: true, running: false });
+    expect(reviewClockView(g, null).b.text).toBe('1:01');
   });
 
-  it('counts the clock of the side to move down once both sides have moved', () => {
-    const one = playAll(['e2e4'], 3000);
-    // Black has not moved yet: the first move starts the clock (DESIGN 9.8).
-    expect(stripClock(one, '1+0', 'b', true, 5_000)).toMatchObject({ text: '1:00', running: false, untimed: false });
+  it('review shows the clocks as they stood at the shown move, never running', () => {
     const g = playAll(['e2e4', 'e7e5', 'g1f3', 'b8c6'], 2000);
-    expect(stripClock(g, '1+0', 'w', true, 55_500)).toMatchObject({ text: '2.5', running: true, low: true, flagged: false });
-    expect(stripClock(g, '1+0', 'w', true, 70_000)).toMatchObject({ text: '0.0', flagged: true });
-    expect(stripClock(g, '1+0', 'b', true, 70_000)).toMatchObject({ text: '0:58', running: false });
+    // Each side's first move is untimed: white used 2 s once (g1f3), black once (b8c6).
+    const v = reviewClockView(g, '1+0');
+    expect(v.w).toMatchObject({ text: '0:58', running: false, untimed: false, flagged: false });
+    expect(v.b).toMatchObject({ text: '0:58', running: false });
+    expect(reviewClockView(zhess.goto(g, 2), '1+0').w.text).toBe('1:00');
+  });
+
+  it('review of a game lost on time shows 0.0 only at the end', () => {
+    const g = playAll(['e2e4', 'e7e5', 'g1f3', 'b8c6'], 2000);
+    const lost = zhess.timeout(g, 'w');
+    expect(reviewClockView(lost, '1+0').w).toMatchObject({ text: '0.0', flagged: true });
+    const earlier = zhess.goto(lost, 2);
+    expect(earlier.end).toBeDefined();
+    expect(reviewClockView(earlier, '1+0').w).toMatchObject({ text: '1:00', flagged: false });
+    expect(reviewClockView(earlier, '1+0').b.flagged).toBe(false);
   });
 
   it('writes English PGN headers', () => {

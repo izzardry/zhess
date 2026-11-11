@@ -24,6 +24,11 @@ export interface ClockPillAnchor {
   y: number;
   /** The pill's bounding rectangle. */
   rect: DOMRect;
+  /**
+   * How the hold happened: `pointer` (the finger or mouse is still down, so the dial aims by
+   * dragging) or `keyboard` (Shift+Enter, Shift+F10, ContextMenu).
+   */
+  source: 'pointer' | 'keyboard';
 }
 
 export interface ClockPillProps {
@@ -52,9 +57,9 @@ export function ClockPill({ value, onChange, onLongPress, disabled = false, clas
 
   useEffect(() => clear, [clear]);
 
-  const anchorAt = (x?: number, y?: number): ClockPillAnchor => {
+  const anchorAt = (source: ClockPillAnchor['source'], x?: number, y?: number): ClockPillAnchor => {
     const rect = button.current?.getBoundingClientRect() ?? new DOMRect();
-    return { x: x ?? rect.left + rect.width / 2, y: y ?? rect.top + rect.height / 2, rect };
+    return { x: x ?? rect.left + rect.width / 2, y: y ?? rect.top + rect.height / 2, rect, source };
   };
 
   const onPointerDown = (e: PointerEvent<HTMLButtonElement>) => {
@@ -65,7 +70,7 @@ export function ClockPill({ value, onChange, onLongPress, disabled = false, clas
     timer.current = setTimeout(() => {
       timer.current = null;
       held.current = true;
-      onLongPress(anchorAt(clientX, clientY));
+      onLongPress(anchorAt('pointer', clientX, clientY));
     }, CLOCK_HOLD_MS);
   };
 
@@ -82,7 +87,7 @@ export function ClockPill({ value, onChange, onLongPress, disabled = false, clas
     if (!onLongPress || disabled) return;
     if (e.key === 'ContextMenu' || (e.shiftKey && (e.key === 'Enter' || e.key === 'F10'))) {
       e.preventDefault();
-      onLongPress(anchorAt());
+      onLongPress(anchorAt('keyboard'));
     }
   };
 

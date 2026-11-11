@@ -7,6 +7,7 @@ export { OpponentSelector, type OpponentSelectorProps } from './OpponentSelector
 export { ColorPill, ColorGlyph, type ColorPillProps } from './ColorPill';
 export { ClockPill, CLOCK_HOLD_MS, type ClockPillProps, type ClockPillAnchor } from './ClockPill';
 export { StartPill, type StartPillProps } from './StartPill';
+export { ClockDial, type ClockDialProps } from './ClockDial';
 export { BoardPreview, type BoardPreviewProps } from './BoardPreview';
 export { ScrollChevron, type ScrollChevronProps } from './ScrollChevron';
 export { BackToTop, type BackToTopProps } from './BackToTop';

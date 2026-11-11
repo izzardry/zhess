@@ -466,6 +466,9 @@ export function useGameState(options: UseGameStateOptions = {}): UseGameState {
       if (e.key === null || e.key.startsWith('zhess:')) bump();
     };
     window.addEventListener('storage', onStorage);
+    // The autosave effect above runs before this subscription on mount (a game opened from a
+    // link is saved at once): re-read the store so the Start pill knows that game after Back.
+    bump();
     return () => {
       off();
       window.removeEventListener('storage', onStorage);
