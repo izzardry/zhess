@@ -109,7 +109,10 @@ export function InfoPill({
       aria-label={t('game.info')}
       className={cn(
         'pointer-events-auto bg-card/80 backdrop-blur-sm border border-border shadow-lg rounded-2xl text-center',
-        landscape ? 'inline-flex flex-col items-center gap-3 px-3 py-4' : 'inline-flex items-center gap-3 sm:gap-4 px-3 sm:px-4 py-2',
+        // Narrow phones: tighter gaps so the pill fits between Back and Help (Ztyle 05 top row).
+        landscape
+          ? 'inline-flex flex-col items-center gap-3 px-3 py-4'
+          : 'inline-flex items-center gap-2 min-[400px]:gap-3 sm:gap-4 px-2.5 min-[400px]:px-3 sm:px-4 py-2',
         placement === 'inline' && className,
       )}
     >
@@ -120,10 +123,13 @@ export function InfoPill({
           {presence}
         </div>
       </div>
-      {divider}
-      <div data-cell="opponent">
-        <div className={EYEBROW}>{eyebrow}</div>
-        <div className={VALUE}>{value}</div>
+      {/* Below 360 px the opponent cell gives way so the pill clears Back and Help. */}
+      <div className={cn('contents', !landscape && 'max-[359px]:hidden')}>
+        {divider}
+        <div data-cell="opponent">
+          <div className={EYEBROW}>{eyebrow}</div>
+          <div className={VALUE}>{value}</div>
+        </div>
       </div>
       {divider}
       <Popover open={open} onOpenChange={setOpen}>

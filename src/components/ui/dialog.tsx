@@ -4,6 +4,7 @@ import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 
+import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 const Dialog = DialogPrimitive.Root;
@@ -32,7 +33,7 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { closeLabel?: string }
->(({ className, children, closeLabel = "Close", ...props }, ref) => (
+>(({ className, children, closeLabel, ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
     <DialogPrimitive.Content
@@ -46,12 +47,18 @@ const DialogContent = React.forwardRef<
       {children}
       <DialogPrimitive.Close className="absolute right-4 top-4 rounded-full p-1 opacity-70 transition-opacity hover:opacity-100 disabled:pointer-events-none">
         <X className="h-4 w-4" />
-        <span className="sr-only">{closeLabel}</span>
+        <CloseLabel label={closeLabel} />
       </DialogPrimitive.Close>
     </DialogPrimitive.Content>
   </DialogPortal>
 ));
 DialogContent.displayName = DialogPrimitive.Content.displayName;
+
+/** The close button's screen-reader label, translated (`close` in common.ts) unless given. */
+function CloseLabel({ label }: { label?: string }) {
+  const { t } = useI18n();
+  return <span className="sr-only">{label ?? t("close")}</span>;
+}
 
 const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div className={cn("flex flex-col space-y-1.5 text-center sm:text-left", className)} {...props} />

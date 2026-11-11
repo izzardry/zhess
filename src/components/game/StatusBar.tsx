@@ -102,6 +102,9 @@ export interface StatusBarProps {
   onCopyPgn?: () => void;
 }
 
+/** Top of the landscape rail: below Help (top 1.5rem, 44 px on touch) with a small gap. */
+const RAIL_TOP = 'calc(max(1.5rem, env(safe-area-inset-top)) + 2.75rem + 0.5rem)';
+
 /** Floating chrome surface (Ztyle 06). */
 const GLASS = 'bg-card/80 backdrop-blur-sm border border-border shadow-lg';
 
@@ -279,11 +282,17 @@ export function StatusBar(props: StatusBarProps) {
   const dividers = groups.length - 1;
 
   // Button size: 44 px where it fits (DESIGN 14.1), shrinking on narrow screens so the bar never
-  // overflows. Overhead = side insets, bar padding and border, dividers, gaps.
-  const overhead = landscape ? 144 + 32 + 2 + dividers * 9 + (count - 1) * 2 : 32 + 16 + 2 + dividers * 9 + (count - 1) * 2;
+  // overflows. Overhead = bar padding and border, dividers, gaps (plus side insets in portrait).
+  // Landscape: the rail starts below the top-right Help button (RAIL_TOP) and is centered when the
+  // screen is tall enough, so it never runs under Help on a short phone in landscape.
+  const railOverhead = 32 + 2 + dividers * 9 + (count - 1) * 2;
+  const overhead = landscape ? railOverhead : 32 + 16 + 2 + dividers * 9 + (count - 1) * 2;
   const size = landscape
-    ? `clamp(30px, calc((100dvh - ${overhead}px) / ${count}), 44px)`
+    ? `clamp(30px, calc((100dvh - ${RAIL_TOP} - 1rem - env(safe-area-inset-bottom) - ${overhead}px) / ${count}), 44px)`
     : `clamp(34px, calc((100vw - ${overhead}px) / ${count}), 44px)`;
+  const railStyle: CSSProperties | undefined = landscape
+    ? { top: `max(${RAIL_TOP}, calc(50% - (${count} * var(--tb) + ${railOverhead}px) / 2))` }
+    : undefined;
 
   const divider = (key: string) => (
     <div key={key} aria-hidden="true" className={landscape ? 'h-px w-6 my-1 bg-border shrink-0' : 'w-px h-6 mx-1 bg-border shrink-0'} />
@@ -337,13 +346,13 @@ export function StatusBar(props: StatusBarProps) {
         aria-hidden={visible ? undefined : true}
         ref={barRef}
         data-mode={mode}
-        style={{ '--tb': size } as CSSProperties}
+        style={{ '--tb': size, ...railStyle } as CSSProperties}
         className={cn(
           'fixed z-chrome flex items-center gap-0.5 rounded-full',
           GLASS,
           'transition-[opacity,transform] duration-chrome ease-out',
           landscape
-            ? 'flex-col px-1.5 py-4 top-1/2 -translate-y-1/2 right-[max(1rem,env(safe-area-inset-right))]'
+            ? 'flex-col px-1.5 py-4 right-[max(1rem,env(safe-area-inset-right))]'
             : 'px-2 py-1.5 left-1/2 -translate-x-1/2 bottom-[max(1rem,env(safe-area-inset-bottom))]',
           // hide toward the owning edge (Ztyle 07): bottom bar down, right rail right
           visible ? 'opacity-100' : 'opacity-0 pointer-events-none',
