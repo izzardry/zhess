@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Zhess app icon — master artwork (DESIGN 2, Ztyle 01 "App icon").
+
+  #0d0d0d full-bleed tile, a thin-stroke 8 × 8 grid hint in the opposite neutral, one knight in
+  the centre drawn like a white piece of the dark theme (stroked in foreground #f2f2f2, filled
+  with background #0d0d0d). Grayscale only, no gradients, no shadow.
+
+  `scripts/generate-brand-images.mjs` rasterizes this file into public/. It relies on the ids:
+    #tile    full-bleed background (kept at 100 % in the maskable variant)
+    #motif   everything else (scaled into the safe zone for the maskable variant)
+    #grid    the grid hint (hidden at favicon sizes, where it would turn to mush)
+    #knight  the glyph (enlarged at favicon sizes)
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect id="tile" width="512" height="512" fill="#0d0d0d" />
+  <g id="motif">
+    <g id="grid" fill="none" stroke="#f2f2f2" stroke-width="2" opacity="0.18">
+      <!-- 8 × 8 board of 40 px cells, from 96 to 416 -->
+      <rect x="96" y="96" width="320" height="320" rx="2" />
+      <path d="M136 96V416 M176 96V416 M216 96V416 M256 96V416 M296 96V416 M336 96V416 M376 96V416
+               M96 136H416 M96 176H416 M96 216H416 M96 256H416 M96 296H416 M96 336H416 M96 376H416" />
+    </g>
+    <g id="grid-dark" fill="#f2f2f2" opacity="0.05">
+      <!-- dark squares as a faint wash, so the hint reads as a chessboard and not graph paper -->
+      <path d="M136 96h40v40h-40z M216 96h40v40h-40z M296 96h40v40h-40z M376 96h40v40h-40z
+               M96 136h40v40h-40z M176 136h40v40h-40z M256 136h40v40h-40z M336 136h40v40h-40z
+               M136 176h40v40h-40z M216 176h40v40h-40z M296 176h40v40h-40z M376 176h40v40h-40z
+               M96 216h40v40h-40z M176 216h40v40h-40z M256 216h40v40h-40z M336 216h40v40h-40z
+               M136 256h40v40h-40z M216 256h40v40h-40z M296 256h40v40h-40z M376 256h40v40h-40z
+               M96 296h40v40h-40z M176 296h40v40h-40z M256 296h40v40h-40z M336 296h40v40h-40z
+               M136 336h40v40h-40z M216 336h40v40h-40z M296 336h40v40h-40z M376 336h40v40h-40z
+               M96 376h40v40h-40z M176 376h40v40h-40z M256 376h40v40h-40z M336 376h40v40h-40z" />
+    </g>
+    <!-- Knight: the piece set's knight (src/components/board/pieceShapes.ts, 100-unit box), painted
+         as a white piece, placed over the centre of the board. The script redraws this group from
+         the piece set when it is importable, so the icon follows the set. -->
+    <g id="knight" transform="translate(256 256) scale(2.6) translate(-50 -51)"
+       fill="#0d0d0d" stroke="#f2f2f2" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M33 78 C33 64 40 58 48 50 C42 50 37 54 31 56 C24 58 20 52 24 47 L40 30 C42 24 46 19 50 14 L53 22 C66 25 75 40 72 78 Z" />
+      <circle cx="43" cy="33" r="3" fill="#f2f2f2" stroke="none" />
+      <path d="M58 30 C65 40 67 55 66 70" fill="none" />
+      <path d="M24 88 H76 V83 Q76 78 71 78 H29 Q24 78 24 83 Z" />
+    </g>
+  </g>
+</svg>
