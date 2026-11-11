@@ -36,6 +36,27 @@ describe('stage helpers', () => {
     expect(totalTime(zhess.undo(g, 1))).toBe(3000);
   });
 
+  it('counts the flagged turn of a game lost on time (DESIGN 8.4 summary)', () => {
+    // 1+0, three plies of 1.5 s: white's first move is untimed, so white has 60 s at its 2nd move...
+    const g = playAll(['e2e4', 'e7e5', 'g1f3'], 1500);
+    // ...and black, after its own untimed first move, has 60 s - 0 = 60 s on the clock now.
+    const lost = zhess.timeout(g, 'b');
+    expect(lost.end).toEqual({ result: '1-0', by: 'time' });
+    const left = zhess.clocks(g, { baseMs: 60_000, incMs: 0 }).b;
+    expect(left).toBeGreaterThan(0);
+    expect(totalTime(lost, '1+0')).toBe(4500 + left);
+    expect(totalTime(lost, { baseMs: 60_000, incMs: 0 })).toBe(4500 + left);
+    // The same from a prepared URL without per-ply times: the full minute of the flagged turn.
+    const bare = zhess.timeout(playAll(['e2e4', 'e7e5'], 0), 'w');
+    expect(totalTime(bare, '1+0')).toBe(60_000);
+    // Without a time control, or not lost on time, nothing is added.
+    expect(totalTime(lost)).toBe(4500);
+    expect(totalTime(lost, null)).toBe(4500);
+    expect(totalTime(zhess.end(g, '0-1', 'resign'), '1+0')).toBe(4500);
+    // A review cursor before the end shows only the logged time.
+    expect(totalTime(zhess.goto(lost, 2), '1+0')).toBe(3000);
+  });
+
   it('allows continuing from a review position but not from mate', () => {
     const mated = playAll(MATE);
     expect(mated.end?.by).toBe('mate');

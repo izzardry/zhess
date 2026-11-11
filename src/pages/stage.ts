@@ -2,10 +2,10 @@
  * Pure helpers of the stage (pages/Index.tsx): what the board, strips, pill and overlay show for a
  * session. No React, no DOM, so they are unit-tested on their own.
  */
-import { clockView, type ClockView } from '@/lib/clock';
+import { clockView, toTimeControl, type ClockView } from '@/lib/clock';
 import { flags } from '@/lib/flags';
 import type { GameSession } from '@/lib/gameRecord';
-import type { Color, Game, Mode, PgnMeta } from '@/lib/types';
+import type { Color, Game, Mode, PgnMeta, TcString, TimeControl } from '@/lib/types';
 import zhess, { legalMoves, parseTc } from '@/lib/zhess';
 
 /**
@@ -48,10 +48,19 @@ export function allSan(g: Game): string[] {
   return zhess.san(g.cursor === g.plies.length ? g : zhess.goto(g, g.plies.length));
 }
 
-/** Time used by both sides up to the cursor (overlay summary). */
-export function totalTime(g: Game): number {
+/**
+ * Time used by both sides up to the cursor (overlay summary, DESIGN 8.4). The log holds only played
+ * plies, so a game lost on time (`tc` given) also counts the flagged turn: the whole time the side
+ * to move had left when it began. That follows from the log and the time control alone, so the
+ * live overlay, a reload and a saved game all give the same duration.
+ */
+export function totalTime(g: Game, tc?: TimeControl | TcString | null): number {
   let ms = 0;
   for (let i = 0; i < g.cursor; i++) ms += g.plies[i].ms;
+  const control = toTimeControl(tc);
+  if (control && g.end?.by === 'time' && g.cursor === g.plies.length) {
+    ms += Math.max(0, zhess.clocks(g, control)[g.turn]);
+  }
   return ms;
 }
 

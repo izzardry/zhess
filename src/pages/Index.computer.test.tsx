@@ -254,6 +254,27 @@ describe('Index stage against the computer', () => {
     expect(screen.getByRole('dialog', { name: 'Out of time' })).toBeInTheDocument();
   });
 
+  it('a loss on time: the summary counts the flagged turn, and the loss tint sits in an isolated stage root', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'setInterval', 'clearTimeout', 'clearInterval', 'performance', 'Date'] });
+    renderStage(`/?s=TINT01&p=1&o=c&d=1&w=w&t=1%2B0&m=${urlOf(['e2e4', 'e7e5'])}`);
+    await act(async () => {
+      vi.advanceTimersByTime(61_000);
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(1500);
+    });
+    const dialog = screen.getByRole('dialog', { name: 'Out of time' });
+    // DESIGN 8.4 summary: the flagged turn's full minute is part of the duration (was 0:00).
+    expect(dialog).toHaveTextContent('TINT01 • Level 1 • 1 move • 1:00');
+    // The loss tint: a negative-z layer that only shows when its parent is a stacking context;
+    // otherwise the opaque html/body backgrounds paint over it (e2e/m2.spec.ts checks the pixels).
+    const tint = document.querySelector<HTMLElement>('[data-tint]')!;
+    expect(tint).toHaveAttribute('data-tint', 'destructive');
+    expect(tint).toHaveClass('completion-failure', '-z-10');
+    expect(tint.parentElement).toHaveClass('isolate');
+    expect(tint.parentElement).toContainElement(stage());
+  });
+
   it('restores the time already spent on the turn after a reload', () => {
     const plies = ['e2e4', 'e7e5'];
     const g = zhess.replay(plies.map((m) => ({ m, ms: 0 })));

@@ -19,6 +19,7 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { createPortal } from 'react-dom';
+import { CAPTION_GAP, clampCenter } from './dialPlacement';
 import {
   DIAL_GEOMETRY,
   DIAL_INCREMENTS,
@@ -60,19 +61,6 @@ interface Drag {
   readonly fromHold: boolean;
   /** The pointer has left the centre at some point. */
   moved: boolean;
-}
-
-/** Room for the caption below the dial. */
-const CAPTION_REACH = 112;
-
-function clampCenter(x: number, y: number): { x: number; y: number } {
-  const vw = typeof window !== 'undefined' ? window.innerWidth : 0;
-  const vh = typeof window !== 'undefined' ? window.innerHeight : 0;
-  const { reach } = DIAL_GEOMETRY;
-  return {
-    x: vw > 2 * reach ? Math.max(reach, Math.min(vw - reach, x)) : x,
-    y: vh > reach + CAPTION_REACH ? Math.max(reach, Math.min(vh - CAPTION_REACH, y)) : y,
-  };
 }
 
 export function ClockDial({ x, y, dragging = false, value = null, onPick, onCancel }: ClockDialProps) {
@@ -290,7 +278,7 @@ export function ClockDial({ x, y, dragging = false, value = null, onPick, onCanc
           aria-hidden
           data-part="caption"
           className="pointer-events-none absolute whitespace-nowrap rounded-full border border-foreground/10 bg-card/90 px-3 py-1 font-mono text-[10px] font-semibold uppercase tracking-widest text-muted-foreground shadow-sm"
-          style={{ left: 0, top: radius + 36, transform: 'translateX(-50%)' }}
+          style={{ left: 0, top: radius + CAPTION_GAP, transform: 'translateX(-50%)' }}
         >
           {step === 'minutes' ? t('clock.dialMinutesCaption') : `${minutes}+ · ${t('clock.dialIncrementCaption')}`}
         </span>

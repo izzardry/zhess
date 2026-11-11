@@ -550,7 +550,9 @@ export default function Index() {
 
   return (
     <PieceRenderProvider render={renderPiece}>
-      <div className={cn('halftone-bg relative select-none', isStart ? 'min-h-[100dvh]' : 'h-[100dvh] overflow-hidden')}>
+      {/* `isolate`: the stage root is the stacking context of the page tint's `-z-10` layer, so the
+          tint paints over the root's background (and html/body's) but under the stage (DESIGN 8.4). */}
+      <div className={cn('halftone-bg relative isolate select-none', isStart ? 'min-h-[100dvh]' : 'h-[100dvh] overflow-hidden')}>
         <PageTint tint={tint} />
 
         {/* ---- the stage: board always centered ---- */}
@@ -669,7 +671,7 @@ export default function Index() {
             code={session.code}
             level={session.level}
             plies={session.game.cursor}
-            durationMs={totalTime(session.game)}
+            durationMs={totalTime(session.game, session.tc)}
             onShare={handleShare}
             onCopyPgn={handleCopyPgn}
             onPrimary={handleNewGame}

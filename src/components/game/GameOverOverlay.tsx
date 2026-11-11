@@ -21,7 +21,10 @@ export interface PageTintProps {
  * The page-wide end-of-game tint (Ztyle `page-tint`): `success/12` or `destructive/12`, fading in
  * over 1000 ms. A `fixed inset-0 -z-10 pointer-events-none` layer, so it sits under the stage's
  * content; keep it mounted (tint null) so it can fade. It stays after the overlay is dismissed.
- * Alternative: put `tintClass(tint)` on the stage root, as Zudoku does.
+ *
+ * Its parent must form a stacking context (`isolate`, as the stage root does). Without one the
+ * negative layer joins the root stacking context and paints before the opaque html / body
+ * backgrounds, which hide it completely.
  */
 export function PageTint({ tint, className }: PageTintProps) {
   return (

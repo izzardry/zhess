@@ -9,7 +9,8 @@
  *  - the hint bulb: one square pulses, the second tap another;
  *  - the blunder guard: hanging the queen from a prepared position is refused once, then accepted;
  *  - a 1+0 game: the running clock decreases, a reload loses at most a second; a clock run down
- *    (Playwright's fake clock) ends in `Out of time`;
+ *    (Playwright's fake clock) ends in `Out of time`; the loss tints the painted page and the
+ *    summary counts the flagged turn (DESIGN 8.4, Gate 2 fix round 1);
  *  - offline after the first load: a new computer game still starts (engine from the SW cache).
  */
 import { test, expect, type BrowserContext, type Locator, type Page } from '@playwright/test';
@@ -114,8 +115,27 @@ async function clockMs(page: Page, color: 'w' | 'b'): Promise<number> {
   return Number(v);
 }
 
+/**
+ * The painted colour [r, g, b] of one CSS pixel of the viewport: a screenshot of that pixel,
+ * decoded by the page's own canvas (no PNG library needed).
+ */
+async function pixelAt(page: Page, at: { x: number; y: number }): Promise<number[]> {
+  const png = await page.screenshot({ clip: { x: at.x, y: at.y, width: 1, height: 1 }, scale: 'css', animations: 'disabled' });
+  return page.evaluate(async (b64) => {
+    const img = new Image();
+    img.src = `data:image/png;base64,${b64}`;
+    await img.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = img.width;
+    canvas.height = img.height;
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(img, 0, 0);
+    return Array.from(ctx.getImageData(0, 0, 1, 1).data.slice(0, 3));
+  }, png.toString('base64'));
+}
+
 /* ---------------------------------------------------------------------------------------------- */
-/* Scenarios                                                                                        */
+/* Scenarios                                                                                 */
 /* ---------------------------------------------------------------------------------------------- */
 
 test.describe('milestone 2 · computer', () => {
@@ -298,6 +318,37 @@ test.describe('milestone 2 · computer', () => {
     await expect(overlay).toBeVisible({ timeout: 10_000 });
     await expect(overlay).toContainText('FLAG01');
     expect(query(page).get('r')).toMatch(/^0-1\.time$/);
+  });
+
+  test('a loss on time tints the page red, also after the overlay is dismissed (DESIGN 8.4)', async ({ page }) => {
+    await page.clock.install();
+    const plies = ['e2e4', 'e7e5'].map((m) => ({ m, ms: 0 }));
+    await page.goto(`./#/?s=TINT01&p=1&o=c&d=1&w=w&t=1%2B0&m=${encodeMoves(plies)}`);
+    await expect(stage(page)).toHaveAttribute('data-engine', 'ready', { timeout: 30_000 });
+    // An empty spot of the stage, left of the board, before the game ends.
+    const spot = { x: 5, y: 300 };
+    const neutral = await pixelAt(page, spot);
+
+    await page.clock.fastForward('01:05');
+    const overlay = page.getByRole('dialog', { name: 'Out of time' });
+    await expect(overlay).toBeVisible({ timeout: 10_000 });
+    // The summary counts the flagged turn: white's whole minute (it read 0:00 before).
+    await expect(overlay).toContainText('TINT01 • Level 1 • 1 move • 1:00');
+    await expect(page.locator('[data-tint]')).toHaveAttribute('data-tint', 'destructive');
+
+    // Dismiss the overlay with a scrim tap; the tint stays.
+    await page.mouse.click(10, 10);
+    await expect(overlay).toBeHidden();
+    // The tint fades in over 1 s (fake clock): let it finish, then read the pixel.
+    await page.clock.fastForward(2000);
+    await expect
+      .poll(async () => {
+        const [r, g, b] = await pixelAt(page, spot);
+        return r - Math.max(g, b);
+      }, { timeout: 5000 })
+      .toBeGreaterThan(10);
+    const tinted = await pixelAt(page, spot);
+    expect(tinted, `tinted ${tinted} vs neutral ${neutral}`).not.toEqual(neutral);
   });
 
   test('offline after the first load, a new computer game still starts', async ({ page, context }) => {

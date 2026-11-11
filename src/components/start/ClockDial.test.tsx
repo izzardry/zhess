@@ -1,11 +1,12 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { useState, type ReactElement } from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { DIAL_INCREMENTS, DIAL_MINUTES } from '@/lib/clock';
+import { DIAL_GEOMETRY, DIAL_INCREMENTS, DIAL_MINUTES } from '@/lib/clock';
 import { I18nProvider } from '@/lib/i18n';
 import { createStore, memoryStorage } from '@/lib/storage';
 import type { Language, TimeControl } from '@/lib/types';
 import { ClockDial, type ClockDialProps } from './ClockDial';
+import { clampCenter, DIAL_EXTENT, DIAL_MARGIN } from './dialPlacement';
 
 const wrap = (ui: ReactElement, language: Language = 'en') =>
   render(
@@ -216,5 +217,56 @@ describe('ClockDial', () => {
     down(item(30));
     expect(screen.getByTestId('tc')).toHaveTextContent('1+30');
     expect(screen.queryByTestId('clock-dial')).toBeNull();
+  });
+});
+
+describe('clampCenter', () => {
+  const phone = { width: 390, height: 844 };
+
+  it('keeps the dial and its caption inside a 390x844 screen when the pill sits near the bottom', () => {
+    // The clock pill near the bottom of a phone (the hold point).
+    const c = clampCenter(195, 790, phone);
+    expect(c.x).toBe(195);
+    // The caption's bottom edge (centre + radius + 36 + its height) stays ≥ 8 px above the edge.
+    const captionBottom = c.y + DIAL_GEOMETRY.radius + 36 + 26;
+    expect(captionBottom).toBeLessThanOrEqual(phone.height - DIAL_MARGIN);
+    // So does a committed item popped out at 6 o'clock, at scale 1.6.
+    expect(c.y + DIAL_GEOMETRY.popRadius + 32).toBeLessThanOrEqual(phone.height - DIAL_MARGIN);
+    // The old clamp (innerHeight - 112 = 732) let the caption spill to ~852 px.
+    expect(c.y).toBeLessThan(732);
+    expect(c.y).toBe(phone.height - DIAL_EXTENT.bottom);
+  });
+
+  it('also clears the bottom safe area', () => {
+    const c = clampCenter(195, 840, { ...phone, safeBottom: 34 });
+    expect(c.y).toBe(phone.height - 34 - DIAL_EXTENT.bottom);
+  });
+
+  it('keeps the items inside the top and side edges with the margin', () => {
+    const c = clampCenter(10, 5, phone);
+    expect(c.x - DIAL_GEOMETRY.reach).toBeGreaterThanOrEqual(DIAL_MARGIN);
+    expect(c.y - DIAL_GEOMETRY.reach).toBeGreaterThanOrEqual(DIAL_MARGIN);
+    const r = clampCenter(385, 400, phone);
+    expect(r.x + DIAL_GEOMETRY.reach).toBeLessThanOrEqual(phone.width - DIAL_MARGIN);
+    expect(r.y).toBe(400);
+  });
+
+  it('leaves a hold alone where the dial fits, and an axis alone where the viewport is too small', () => {
+    expect(clampCenter(500, 400, { width: 1280, height: 800 })).toEqual({ x: 500, y: 400 });
+    expect(clampCenter(50, 50, { width: 100, height: 100 })).toEqual({ x: 50, y: 50 });
+  });
+
+  it('opens the dial at the clamped centre', () => {
+    const before = { w: window.innerWidth, h: window.innerHeight };
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 844 });
+    try {
+      mount({ x: 195, y: 800 });
+      expect(dial().style.top).toBe(`${844 - DIAL_EXTENT.bottom}px`);
+      expect(dial().style.left).toBe('195px');
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: before.w });
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: before.h });
+    }
   });
 });
