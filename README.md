@@ -4,6 +4,8 @@
 
 A minimalist chess game built as a Progressive Web App, by [izzardry](https://github.com/izzardry). Play the computer, pass one device between two players, or open a room for two devices with no game server. No ads, no accounts, no nonsense — just chess.
 
+Play it at **[izzardry.github.io/zhess](https://izzardry.github.io/zhess/)**.
+
 ## Features
 
 - **Computer opponent** — Stockfish in a Web Worker, 12 levels from Beginner to Insane (default Medium); the low levels make human mistakes

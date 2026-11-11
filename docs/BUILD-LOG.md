@@ -20,7 +20,7 @@ The overnight run of 2026-11-11 is complete. All three milestones and the final 
 
 **Not verified (needs you):** two real phones on different networks (without TURN, some NAT pairs will not connect); the iOS installed-PWA path with the manual fallback, and Safari/Firefox in general (e2e is Chromium only); how levels 1–12 feel in play; blunder-guard latency on a low-end phone. The PeerJS broker path **was** verified (Chromium, one machine).
 
-**For you to decide or do:** enable GitHub Pages (the deploy workflow fails until then); set `og:image` to the deployed URL; review the 19 npm audit advisories; optionally split the 748 kB main chunk. PLAN.md and PROMPT.md stay uncommitted (excluded via .git/info/exclude), as asked.
+**For you to decide or do:** review the 19 npm audit advisories; optionally split the 748 kB main chunk. PLAN.md and PROMPT.md stay uncommitted (excluded via .git/info/exclude), as asked.
 
 **Decisions and deviations:** every one is listed below under "Decisions" and "Deviations", grouped by phase. The most visible are:
 - Strict TypeScript.
@@ -236,8 +236,7 @@ _(Features switched off in `src/lib/flags.ts`, tests marked `fixme`, and anythin
 Nothing is switched off: every flag in `src/lib/flags.ts` is on, and no test is marked `fixme` or skipped. The broker test can skip itself only when 0.peerjs.com is unreachable, and it did not.
 
 For the owner:
-- The GitHub Pages deploy workflow (`.github/workflows/deploy.yml`) fails on each push to `main` until Pages is enabled (the run must not enable it).
-- `og:image` / `twitter:image` are root-absolute (`/og-image.png`); set them to the deployed URL once it exists.
+- Done after the run, on the owner's go-ahead: the repository is public and GitHub Pages is enabled (Actions source); the app is live at https://izzardry.github.io/zhess/. `og:image` / `twitter:image` now point at the absolute Pages URL, with `og:url` added.
 - `npm install` reported 19 audit advisories (2 low, 14 moderate, 1 high, 2 critical) in dev/build dependencies; not addressed.
 - Build warns that the main JS chunk is 748 kB (> 500 kB). peerjs is already split out; the engine is not bundled.
 
