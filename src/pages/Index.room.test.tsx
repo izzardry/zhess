@@ -138,11 +138,26 @@ describe('Index stage in a room', () => {
     fireEvent.click(within(toolbar()).getByRole('button', { name: 'Ask for a takeback' }));
     await waitFor(() => expect(other.snapshot.requests.incoming).toBe('takeback'));
     expect(within(toolbar()).getByRole('button', { name: 'Takeback requested' })).toBeDisabled();
+    // The pending state lives on the button only: no toast over the toolbar (DESIGN 9.7).
+    expect(screen.queryByText('Waiting for your opponent')).toBeNull();
     act(() => {
       expect(other.reply('takeback', true)).toBe(true);
     });
     await waitFor(() => expect(cellName('e4')).toBe('e4'));
     expect(cellName('e2')).toMatch(/^white pawn/);
+
+    // A tap on the flag offers a draw: the flag shows it until the answer, no toast (DESIGN 9.7).
+    fireEvent.click(within(toolbar()).getByRole('button', { name: 'Offer a draw (hold to resign)' }));
+    await waitFor(() => expect(other.snapshot.requests.incoming).toBe('draw'));
+    const offered = within(toolbar()).getByRole('button', { name: 'Draw offered (hold to resign)' });
+    expect(offered).toHaveAttribute('data-pending', 'true');
+    expect(offered).toBeEnabled();
+    expect(screen.queryByText('Waiting for your opponent')).toBeNull();
+    act(() => {
+      expect(other.reply('draw', false)).toBe(true);
+    });
+    expect(await screen.findByText('Draw declined')).toBeInTheDocument();
+    expect(within(toolbar()).getByRole('button', { name: 'Offer a draw (hold to resign)' })).not.toHaveAttribute('data-pending');
 
     // The opponent resigns: the overlay says so and offers Rematch (DESIGN 8.4).
     act(() => {
@@ -151,6 +166,9 @@ describe('Index stage in a room', () => {
     const over = await screen.findByRole('dialog', { name: /You won!/ }, { timeout: 4000 });
     fireEvent.click(within(over).getByRole('button', { name: 'Rematch' }));
     await waitFor(() => expect(other.snapshot.requests.incoming).toBe('rematch'));
+    // The overlay stays and its Rematch button shows the pending state (DESIGN 9.7).
+    await waitFor(() => expect(within(over).getByRole('button', { name: 'Rematch' })).toBeDisabled());
+    expect(within(over).getByRole('status')).toHaveTextContent('Waiting for your opponent');
     act(() => {
       expect(other.reply('rematch', true)).toBe(true);
     });
@@ -182,7 +200,8 @@ describe('Index stage in a room', () => {
     expect(stage()).toHaveAttribute('data-phase', 'playing');
     await waitFor(() => expect(stage()).toHaveAttribute('data-room-presence', 'connected'));
     expect(cellName('d4')).toMatch(/^white pawn/);
-  });
+    // A whole series through the real controller: more than the default 5 s under a loaded run.
+  }, 15_000);
 
   it('an invite link opens the room at once and joins it', async () => {
     // The host device (seat 0) creates the room with its own storage.
@@ -206,14 +225,26 @@ describe('Index stage in a room', () => {
     broker.fail = true;
     renderStage('/?s=RMS003');
     fireEvent.click(screen.getByRole('button', { name: 'Start' }));
-    expect(await screen.findByText('Could not reach the connection service.')).toBeInTheDocument();
     const invite = await screen.findByTestId('invite-sheet');
+    // The sheet carries the cause and its own `Connect manually`: the failure toast steps aside
+    // instead of covering them with the same words (Gate 3 finding).
+    expect(await within(invite).findByText('Could not reach the connection service.')).toBeInTheDocument();
+    await act(async () => {});
+    expect(screen.getAllByText('Could not reach the connection service.')).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Connect manually' })).toHaveLength(1);
     fireEvent.click(within(invite).getByRole('button', { name: 'Connect manually' }));
     // jsdom has no WebRTC: the manual sheet says so calmly and offers to start over.
     const sheet = await screen.findByTestId('manual-sheet');
     expect(await within(sheet).findByText('This browser cannot open a direct connection.')).toBeInTheDocument();
     expect(within(sheet).getByRole('button', { name: 'Start over' })).toBeInTheDocument();
     expect(stage()).toHaveAttribute('data-room-cause', 'broker-unreachable');
+    expect(screen.queryByText('Could not reach the connection service.')).toBeNull();
+
+    // Both sheets closed and still not live: the message comes back, with its button.
+    fireEvent.keyDown(sheet, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByTestId('manual-sheet')).toBeNull());
+    expect(await screen.findByText('Could not reach the connection service.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Connect manually' })).toBeInTheDocument();
   });
 
   it('a finished older room game opens in review; deleting a room game removes the room record with undo', async () => {
@@ -230,6 +261,8 @@ describe('Index stage in a room', () => {
     await waitFor(() => expect(other.snapshot.requests.incoming).toBe('rematch'));
     act(() => void other.reply('rematch', true));
     await waitFor(() => expect(other.snapshot.n).toBe(2));
+    // The overlay waits with its pending Rematch until game 2 starts here too (DESIGN 9.7).
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: /You won!/ })).toBeNull());
     fireEvent.click(screen.getByRole('button', { name: 'Back to start' }));
 
     const cards = await screen.findAllByTestId('history-card');

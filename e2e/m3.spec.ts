@@ -127,9 +127,13 @@ async function hostOffer(host: Page): Promise<string> {
   // The broker is blocked: the app classifies it as unreachable and offers the manual exchange.
   const connect = invite.getByRole('button', { name: 'Connect manually' });
   await expect(connect).toBeVisible({ timeout: 20_000 });
+  // The sheet carries the cause and the button; the failure toast does not repeat them over it.
+  await expect(host.getByText('Could not reach the connection service.')).toHaveCount(1);
+  await expect(host.getByRole('button', { name: 'Connect manually' })).toHaveCount(1);
   await connect.click();
   const sheet = host.getByTestId('manual-sheet');
   await expect(sheet.getByText('Step 1 of 2')).toBeVisible({ timeout: 15_000 });
+  await expect(host.getByText('Could not reach the connection service.')).toHaveCount(0);
   const offer = await linkIn(sheet);
   expect(offer).toMatch(/[?&]o=r&x=/);
   return offer;
@@ -139,6 +143,8 @@ async function hostOffer(host: Page): Promise<string> {
 async function guestAnswer(guest: Page): Promise<string> {
   const sheet = guest.getByTestId('manual-sheet');
   await expect(sheet.getByText('Send this link back to your opponent')).toBeVisible({ timeout: 15_000 });
+  // The guest of a manual exchange is never offered `Connect manually` (no failure toast).
+  await expect(guest.getByRole('button', { name: 'Connect manually' })).toHaveCount(0);
   const answer = await linkIn(sheet);
   expect(answer).toMatch(/&y=/);
   return answer;
@@ -244,8 +250,12 @@ test.describe('Gate 3 · rooms', () => {
     await toolbar(h).getByRole('button', { name: 'Offer a draw (hold to resign)' }).click();
     const draw = incoming(g, 'Your opponent offers a draw');
     await expect(draw).toBeVisible({ timeout: 15_000 });
+    // The host's pending state is on the flag, not in a toast over the toolbar (DESIGN 9.7).
+    await expect(toolbar(h).getByRole('button', { name: 'Draw offered (hold to resign)' })).toBeVisible();
+    await expect(h.getByText('Waiting for your opponent', { exact: true })).toHaveCount(0);
     await draw.getByRole('button', { name: 'Decline' }).click();
     await expect(h.getByText('Draw declined')).toBeVisible({ timeout: 15_000 });
+    await expect(toolbar(h).getByRole('button', { name: 'Offer a draw (hold to resign)' })).toBeVisible();
     await expect(stage(h)).toHaveAttribute('data-phase', 'playing');
 
     // Resign: the guest holds the flag. Final in a room: no undo toast.
@@ -259,6 +269,9 @@ test.describe('Gate 3 · rooms', () => {
     await won.getByRole('button', { name: 'Rematch' }).click();
     const rematch = incoming(g, 'Your opponent wants a rematch');
     await expect(rematch).toBeVisible({ timeout: 15_000 });
+    // The asker's overlay stays, its Rematch showing the pending state (DESIGN 9.7).
+    await expect(won.getByRole('button', { name: 'Rematch' })).toBeDisabled();
+    await expect(won.getByText('Waiting for your opponent', { exact: true })).toBeVisible();
     await rematch.getByRole('button', { name: 'Accept' }).click();
     await expect(h.getByRole('dialog', { name: /You won!/ })).toHaveCount(0, { timeout: 15_000 });
     await expect(g.getByRole('dialog', { name: /Resigned/ })).toHaveCount(0);

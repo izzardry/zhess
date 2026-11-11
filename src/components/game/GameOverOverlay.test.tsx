@@ -62,6 +62,15 @@ describe('GameOverOverlay', () => {
     expect(screen.getByRole('button', { name: 'Rematch' })).toBeDisabled();
   });
 
+  it('room: a waiting rematch shows its note under the buttons, only while busy (DESIGN 9.7)', () => {
+    const note = 'Waiting for your opponent';
+    const { rerender } = renderWithI18n(<GameOverOverlay {...props({ mode: 'room', primaryNote: note })} />);
+    expect(screen.queryByText(note)).toBeNull();
+    rerender(<GameOverOverlay {...props({ mode: 'room', primaryBusy: true, primaryNote: note })} />);
+    expect(screen.getByRole('status')).toHaveTextContent(note);
+    expect(screen.getByRole('button', { name: 'Rematch' })).toHaveAttribute('aria-busy', 'true');
+  });
+
   it('actions call back; the scrim and Escape dismiss, the content does not', () => {
     const p = props();
     renderWithI18n(<GameOverOverlay {...p} />);

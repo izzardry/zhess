@@ -62,6 +62,8 @@ export interface GameOverOverlayProps {
   onPrimary: () => void;
   /** Rematch asked and waiting for the opponent: the primary button spins and is disabled. */
   primaryBusy?: boolean;
+  /** Shown under the buttons while `primaryBusy` (e.g. `Waiting for your opponent`). */
+  primaryNote?: string;
   /** Scrim tap or Escape: hide the overlay to look at the board. */
   onDismiss: () => void;
   /** Wait for the page tint before appearing; default 1000 ms. */
@@ -85,6 +87,7 @@ export function GameOverOverlay({
   onCopyPgn,
   onPrimary,
   primaryBusy = false,
+  primaryNote,
   onDismiss,
   delayMs = TINT_MS,
 }: GameOverOverlayProps) {
@@ -195,6 +198,11 @@ export function GameOverOverlay({
             {mode === 'room' ? t('rematch') : t('newGame')}
           </button>
         </div>
+        {primaryBusy && primaryNote && (
+          <p role="status" className="mt-4 text-xs text-muted-foreground" data-testid="primary-note">
+            {primaryNote}
+          </p>
+        )}
       </div>
     </div>
   );

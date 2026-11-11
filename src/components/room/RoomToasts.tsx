@@ -8,7 +8,10 @@
  * - Version mismatch: the reload toast; the service-worker update check runs (`onUpdateCheck`).
  * - The calm failure message, once per cause: ICE failed (`Could not reach your opponent
  *   directly. Try another network.`), broker unreachable, or signalling failing for 10 s; each with
- *   `Connect manually`. It goes away when the room is live.
+ *   `Connect manually`. It goes away when the room is live. While `quiet` (the invite sheet or the
+ *   manual sheet is open, both of which carry the cause or the step themselves, or this device is
+ *   the guest of a manual exchange) it is held back, and it comes back when `quiet` ends if the
+ *   room is still not live and the message was not answered (its button) or swiped away.
  *
  * Also renders `RequestToasts` for the requests. Renders nothing itself.
  */
@@ -23,6 +26,7 @@ import { manualCauseKey, noticeKey } from './text';
 /** Sonner ids used by the room toasts. */
 export const ROOM_TOAST_IDS = {
   presence: 'room-presence',
+  /** Prefix: each showing of the failure message gets its own id (see `present`). */
   connect: 'room-connect',
   version: 'room-version',
 } as const;
@@ -38,6 +42,12 @@ export interface RoomToastsProps {
   manualCause?: ManualCause | null;
   /** The room is live: the failure message goes away. */
   live?: boolean;
+  /**
+   * Holds the failure message back: a sheet that shows the cause or the manual step is open, or
+   * this device is the guest of a manual exchange (an `x` link), where `Connect manually` makes no
+   * sense. A message held back shows when `quiet` ends and the room is still not live.
+   */
+  quiet?: boolean;
   /** `Connect manually`; without it the failure message has no action. */
   onConnectManually?: () => void;
   /** Triggered on a version mismatch (the service worker update check, DESIGN 9.11). */
@@ -46,28 +56,65 @@ export interface RoomToastsProps {
   onReload?: () => void;
 }
 
-export function RoomToasts({ onNotice, requests, onReply, manualCause, live, onConnectManually, onUpdateCheck, onReload }: RoomToastsProps) {
+export function RoomToasts({ onNotice, requests, onReply, manualCause, live, quiet = false, onConnectManually, onUpdateCheck, onReload }: RoomToastsProps) {
   const { t } = useI18n();
   const cb = useRef({ t, onConnectManually, onUpdateCheck, onReload });
   cb.current = { t, onConnectManually, onUpdateCheck, onReload };
-  /** Failure causes already shown (each once, DESIGN 9.10). */
+  const quietRef = useRef(quiet);
+  quietRef.current = quiet;
+  /** Failure causes already announced (each once, DESIGN 9.10). */
   const shown = useRef(new Set<string>());
+  /** The announced cause whose message is still owed: not answered, not swiped away, not live. */
+  const outstanding = useRef<ManualCause | null>(null);
+  /**
+   * Sonner id of the failure message on screen. Each showing takes a fresh one: sonner keeps a
+   * dismissed toast's `delete` mark through its exit animation, so a toast re-created under the
+   * same id in that window would vanish.
+   */
+  const connectId = useRef<string>(ROOM_TOAST_IDS.connect);
+  const showings = useRef(0);
+  /** The failure message is on screen (under `connectId`). */
+  const onScreen = useRef(false);
 
-  const showFailure = useRef((cause: ManualCause) => {
+  /** Puts the failure message on screen, replacing an earlier showing. */
+  const present = useRef((cause: ManualCause) => {
     const key = manualCauseKey(cause);
-    if (!key || shown.current.has(cause)) return;
-    shown.current.add(cause);
+    if (!key) return;
     const { t: tr, onConnectManually: connect } = cb.current;
+    // On screen: updated in place. Otherwise a fresh id.
+    if (!onScreen.current) connectId.current = `${ROOM_TOAST_IDS.connect}-${++showings.current}`;
+    onScreen.current = true;
+    const id = connectId.current;
+    const gone = () => {
+      if (connectId.current === id) onScreen.current = false;
+    };
     toast(tr(key), {
-      id: ROOM_TOAST_IDS.connect,
+      id,
       duration: Infinity,
+      // Only a user's swipe calls this (sonner): the message is answered.
+      onDismiss: () => {
+        gone();
+        if (outstanding.current === cause) outstanding.current = null;
+      },
       action: connect
         ? {
             label: tr('room.connectManually'),
-            onClick: () => cb.current.onConnectManually?.(),
+            onClick: () => {
+              // sonner closes the toast after its action.
+              gone();
+              outstanding.current = null;
+              cb.current.onConnectManually?.();
+            },
           }
         : undefined,
     });
+  });
+
+  const showFailure = useRef((cause: ManualCause) => {
+    if (!manualCauseKey(cause) || shown.current.has(cause)) return;
+    shown.current.add(cause);
+    outstanding.current = cause;
+    if (!quietRef.current) present.current(cause);
   });
 
   useEffect(
@@ -106,9 +153,17 @@ export function RoomToasts({ onNotice, requests, onReply, manualCause, live, onC
     if (manualCause && !live) showFailure.current(manualCause);
   }, [manualCause, live]);
 
+  // Live: the message has done its job. Quiet: it steps aside for the sheet (or the manual guest)
+  // and comes back afterwards if it is still owed.
   useEffect(() => {
-    if (live) toast.dismiss(ROOM_TOAST_IDS.connect);
-  }, [live]);
+    if (live) outstanding.current = null;
+    if (live || quiet) {
+      onScreen.current = false;
+      toast.dismiss(connectId.current);
+      return;
+    }
+    if (outstanding.current && !onScreen.current) present.current(outstanding.current);
+  }, [live, quiet]);
 
   return <RequestToasts requests={requests} onReply={onReply} />;
 }

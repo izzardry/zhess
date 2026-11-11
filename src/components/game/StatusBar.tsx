@@ -93,6 +93,8 @@ export interface StatusBarProps {
   onResign?: () => void;
   /** E.g. the game is over or the board is locked. */
   flagDisabled?: boolean;
+  /** Room: this device's draw offer is outstanding (the flag shows it; hold still resigns). */
+  flagPending?: boolean;
   /** Review: the flag slot becomes "continue from here". Undefined hides it. */
   onContinue?: () => void;
 
@@ -104,6 +106,9 @@ export interface StatusBarProps {
 
 /** Top of the landscape rail: below Help (top 1.5rem, 44 px on touch) with a small gap. */
 const RAIL_TOP = 'calc(max(1.5rem, env(safe-area-inset-top)) + 2.75rem + 0.5rem)';
+
+/** A request waits for the opponent (DESIGN 9.7): the icon pulses, like the waiting presence dot. */
+const PENDING = 'animate-pulse motion-reduce:animate-none';
 
 /** Floating chrome surface (Ztyle 06). */
 const GLASS = 'bg-card/80 backdrop-blur-sm border border-border shadow-lg';
@@ -132,6 +137,7 @@ export function StatusBar(props: StatusBarProps) {
     onOfferDraw,
     onResign,
     flagDisabled,
+    flagPending,
     onContinue,
     onShare,
     onCopyPgn,
@@ -160,7 +166,7 @@ export function StatusBar(props: StatusBarProps) {
       <ToolbarButton
         key="undo"
         label={undoPending ? t('game.takebackPending') : t('game.askTakeback')}
-        icon={<Undo2 aria-hidden="true" />}
+        icon={<Undo2 className={cn(undoPending && PENDING)} aria-hidden="true" />}
         onClick={onUndo}
         disabled={!canUndo || undoPending}
         data-slot="undo"
@@ -249,13 +255,14 @@ export function StatusBar(props: StatusBarProps) {
     out.push(
       <ToolbarButton
         key="flag"
-        label={local ? t('game.holdToResign') : t('game.drawOrResign')}
-        icon={<Flag aria-hidden="true" />}
+        label={local ? t('game.holdToResign') : flagPending ? t('game.drawPending') : t('game.drawOrResign')}
+        icon={<Flag className={cn(flagPending && !local && PENDING)} aria-hidden="true" />}
         // Pass-and-play has no draw offer: the tap is ignored and the button only resigns (DESIGN 8.3).
         onClick={local ? undefined : onOfferDraw}
         hold={onResign ? { ms: HOLD_MS.flag, onHold: onResign } : undefined}
         disabled={flagDisabled}
         data-slot="flag"
+        data-pending={flagPending && !local ? 'true' : undefined}
       />,
     );
   }

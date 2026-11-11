@@ -318,12 +318,29 @@ describe('RequestToasts', () => {
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
   });
 
-  it('shows the pending state of an own request until it is answered', async () => {
+  // DESIGN 9.7: the requester sees a pending state on the button (undo, flag, overlay Rematch).
+  // A toast here sat on the toolbar for as long as the request was open (Gate 3 finding), so this
+  // test, which asserted that toast, now asserts its absence.
+  it('shows no toast for an own request: its button carries the pending state', async () => {
     const { rerender } = renderRoom(<RequestToasts requests={{ outgoing: 'draw' }} onReply={() => {}} />);
-    expect(await screen.findByText('Draw offered')).toBeInTheDocument();
-    expect(screen.getByText('Waiting for your opponent')).toBeInTheDocument();
-    rerender(<RequestToasts requests={null} onReply={() => {}} />);
-    await waitFor(() => expect(screen.queryByText('Draw offered')).toBeNull());
+    await act(async () => {});
+    expect(screen.queryByText('Draw offered')).toBeNull();
+    expect(screen.queryByText('Waiting for your opponent')).toBeNull();
+    rerender(<RequestToasts requests={{ outgoing: 'takeback' }} onReply={() => {}} />);
+    await act(async () => {});
+    expect(screen.queryByText('Takeback requested')).toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('draws one frame, the toaster frame, around plain content (no card in a card)', async () => {
+    renderRoom(<RequestToasts requests={{ incoming: 'takeback' }} onReply={() => {}} />);
+    const content = await screen.findByRole('alertdialog', { name: 'Your opponent asks for a takeback' });
+    expect(content).not.toHaveClass('toast');
+    expect(content.className).not.toMatch(/\b(border|shadow|bg-card|rounded)/);
+    const frame = content.closest('[data-sonner-toast]');
+    expect(frame).not.toBeNull();
+    expect(frame).toHaveClass('toast');
+    expect(frame!.querySelectorAll('.toast')).toHaveLength(0);
   });
 
   it('speaks Spanish with tú', async () => {
@@ -406,6 +423,47 @@ describe('RoomToasts', () => {
     expect(await screen.findByText('Still no connection to your opponent.')).toBeInTheDocument();
     rerender(<RoomToasts onNotice={src.onNotice} onReply={() => {}} onConnectManually={connect} manualCause={null} live />);
     await waitFor(() => expect(screen.queryByText('Still no connection to your opponent.')).toBeNull());
+  });
+
+  it('holds the failure message back while quiet and shows it afterwards if still owed', async () => {
+    const src = noticeSource();
+    const connect = vi.fn();
+    const props = { onNotice: src.onNotice, onReply: () => {}, onConnectManually: connect };
+    // A sheet is open (or this is a manual guest): the cause arrives but no toast covers the sheet.
+    const { rerender } = renderRoom(<RoomToasts {...props} manualCause="broker-unreachable" quiet />);
+    await act(async () => {});
+    expect(screen.queryByText('Could not reach the connection service.')).toBeNull();
+    // The sheet closes, the room is still not live: the message shows, with its button.
+    rerender(<RoomToasts {...props} manualCause="broker-unreachable" />);
+    expect(await screen.findByText('Could not reach the connection service.')).toBeInTheDocument();
+    // A sheet opens over it: the message steps aside, and comes back when the sheet closes.
+    rerender(<RoomToasts {...props} manualCause="broker-unreachable" quiet />);
+    await waitFor(() => expect(screen.queryByText('Could not reach the connection service.')).toBeNull());
+    rerender(<RoomToasts {...props} manualCause="broker-unreachable" />);
+    expect(await screen.findByText('Could not reach the connection service.')).toBeInTheDocument();
+    // Answered through its button: it does not come back after the manual sheet closes again.
+    await userEvent.click(screen.getByRole('button', { name: 'Connect manually' }));
+    expect(connect).toHaveBeenCalledTimes(1);
+    rerender(<RoomToasts {...props} manualCause="broker-unreachable" quiet />);
+    rerender(<RoomToasts {...props} manualCause="broker-unreachable" />);
+    await waitFor(() => expect(screen.queryByText('Could not reach the connection service.')).toBeNull());
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 500));
+    });
+    expect(screen.queryByText('Could not reach the connection service.')).toBeNull();
+  });
+
+  it('an ICE failure while quiet waits; going live drops what is owed', async () => {
+    const src = noticeSource();
+    const props = { onNotice: src.onNotice, onReply: () => {}, onConnectManually: () => {} };
+    const { rerender } = renderRoom(<RoomToasts {...props} quiet />);
+    src.emit('ice-failed');
+    await act(async () => {});
+    expect(screen.queryByText(/Could not reach your opponent/)).toBeNull();
+    rerender(<RoomToasts {...props} live quiet />);
+    rerender(<RoomToasts {...props} live />);
+    await act(async () => {});
+    expect(screen.queryByText(/Could not reach your opponent/)).toBeNull();
   });
 
   it('shows no failure toast for a room without a broker (the invite sheet carries the button)', async () => {

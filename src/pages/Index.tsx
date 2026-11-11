@@ -382,10 +382,11 @@ export default function Index() {
   }, [animate, gs, bankNow]);
 
   const handleNewGame = useCallback(() => {
-    // A room plays on in the same room: Rematch asks the opponent (DESIGN 8.4, 9.7).
+    // A room plays on in the same room: Rematch asks the opponent (DESIGN 8.4, 9.7). The overlay
+    // stays, its button showing the pending state, until game n+1 starts or the answer is No.
     const r = gsRef.current.room;
     if (r) {
-      if (r.ask('rematch')) setOverlay(false);
+      r.ask('rematch');
       return;
     }
     setOverlay(false);
@@ -510,6 +511,10 @@ export default function Index() {
   // waits for an answer, so its toast (e.g. Allow for a rejoin, DESIGN 9.5) can be reached.
   const requestWaiting = !!rs?.requests.incoming;
   const manualShown = !!room && (manualOpen || manualAuto) && !roomLive && manualStep !== 'connected' && !requestWaiting;
+  const inviteShown = inviteOpen && !manualShown && !requestWaiting;
+  // The failure toast (with its own `Connect manually`) steps aside while a sheet that shows the
+  // cause or the step is open, and never shows to the guest of a manual exchange (an `x` link).
+  const failureQuiet = inviteShown || manualShown || (manual?.role === 'guest' && manualStep !== 'idle' && manualStep !== 'connected');
   // Done once its channel is open: a later loss starts from `Connect manually` again, not this sheet.
   useEffect(() => {
     if (manualStep === 'connected') setManualOpen(false);
@@ -775,6 +780,7 @@ export default function Index() {
               onOfferDraw={mode === 'computer' ? handleOfferDraw : roomMode ? handleRoomDraw : undefined}
               onResign={handleResign}
               flagDisabled={!!end || (roomMode && !roomResignable(rs))}
+              flagPending={roomMode && rs?.requests.outgoing === 'draw'}
               onContinue={canContinue ? handleContinue : undefined}
               onShare={roomMode && phase !== 'review' ? () => setInviteOpen(true) : handleShare}
               onCopyPgn={handleCopyPgn}
@@ -795,6 +801,8 @@ export default function Index() {
             onShare={handleShare}
             onCopyPgn={handleCopyPgn}
             onPrimary={handleNewGame}
+            primaryBusy={roomMode && rs?.requests.outgoing === 'rematch'}
+            primaryNote={roomMode ? t('room.pending.waiting') : undefined}
             onDismiss={() => setOverlay(false)}
           />
         )}
@@ -807,11 +815,12 @@ export default function Index() {
               onReply={room.reply}
               manualCause={room.manualCause}
               live={roomLive}
+              quiet={failureQuiet}
               onConnectManually={connectManually}
               onUpdateCheck={() => void checkForUpdate()}
             />
             <InviteSheet
-              open={inviteOpen && !manualShown && !requestWaiting}
+              open={inviteShown}
               onOpenChange={setInviteOpen}
               code={room.code}
               presence={rs?.presence ?? null}

@@ -67,6 +67,22 @@ describe('StatusBar slots per mode (DESIGN 4.2)', () => {
     expect(screen.getByRole('button', { name: 'Takeback requested' })).toBeDisabled();
   });
 
+  it('room: an outstanding draw offer shows on the flag, which still resigns on hold (DESIGN 9.7)', () => {
+    vi.useFakeTimers();
+    const p = props({ mode: 'room', flagPending: true });
+    renderWithI18n(<StatusBar {...p} />);
+    const flag = screen.getByRole('button', { name: 'Draw offered (hold to resign)' });
+    expect(flag).toBeEnabled();
+    expect(flag).toHaveAttribute('data-pending', 'true');
+    hold(flag, 500);
+    expect(p.onResign).toHaveBeenCalledTimes(1);
+  });
+
+  it('pass-and-play ignores flagPending: the flag only resigns', () => {
+    renderWithI18n(<StatusBar {...props({ mode: 'local', flagPending: true })} />);
+    expect(screen.getByRole('button', { name: 'Resign (hold)' })).not.toHaveAttribute('data-pending');
+  });
+
   it('review: stepping, flip, continue from here, share menu', () => {
     renderWithI18n(<StatusBar {...props({ mode: 'review', onCopyPgn: vi.fn() })} />);
     expect(slots()).toEqual(['undo', 'redo', 'helpers', 'flip', 'continue', 'share']);

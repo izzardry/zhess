@@ -4,25 +4,26 @@
  * - Incoming takeback, draw, rematch: an undo-style toast with Decline and Accept. Rejoin from a
  *   new device: Decline and Allow. It stays until answered and disappears by itself when the
  *   request lapses (the requester moved, the opponent moved, the game changed, the peer left).
- * - Outgoing: a pending toast (`Draw offered`, waiting for the opponent) while the request is
- *   open. The toolbar shows the same pending state on its button.
+ * - Outgoing: no toast. The requester sees the pending state on the button that asked (DESIGN
+ *   9.7): the undo button (takeback), the flag (draw) and the overlay's Rematch. A toast here
+ *   would sit on the toolbar at phone width for as long as the request is open.
  *
- * Toasts go through sonner (`toast.custom`, Ztyle toast markup) with fixed ids, so a request is
- * shown once however often the component renders. Renders nothing itself.
+ * Toasts go through sonner (`toast.custom`) with a fixed id, so a request is shown once however
+ * often the component renders. The Toaster frames every toast (Ztyle `.toast`, see
+ * `components/ui/sonner.tsx`), so the custom content only lays out the text and the buttons.
+ * Renders nothing itself.
  */
-import { Loader2 } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { useI18n } from '@/lib/i18n';
 import type { RequestKind } from '@/lib/types';
-import { pendingKey, requestKey } from './text';
+import { requestKey } from './text';
 
-/** Sonner ids of the two request toasts. */
+/** Sonner id of the incoming request toast. */
 export const INCOMING_TOAST_ID = 'room-request-in';
-export const OUTGOING_TOAST_ID = 'room-request-out';
 
 export interface RequestToastsProps {
-  /** `RoomSnapshot.requests`. */
+  /** `RoomSnapshot.requests`; only `incoming` shows a toast. */
   requests: { readonly incoming?: RequestKind | 'rejoin'; readonly outgoing?: RequestKind } | null | undefined;
   /** Answers the incoming request (`RoomController.reply`). */
   onReply: (kind: RequestKind | 'rejoin', ok: boolean) => void;
@@ -33,7 +34,6 @@ export function RequestToasts({ requests, onReply }: RequestToastsProps) {
   const replyRef = useRef(onReply);
   replyRef.current = onReply;
   const incoming = requests?.incoming;
-  const outgoing = requests?.outgoing;
 
   useEffect(() => {
     if (!incoming) return;
@@ -44,8 +44,13 @@ export function RequestToasts({ requests, onReply }: RequestToastsProps) {
     };
     toast.custom(
       () => (
-        <div role="alertdialog" aria-label={t(requestKey(kind))} data-request={kind} className="toast w-[min(90vw,360px)] font-mono">
-          <span className="text-sm min-w-0">{t(requestKey(kind))}</span>
+        <div
+          role="alertdialog"
+          aria-label={t(requestKey(kind))}
+          data-request={kind}
+          className="flex w-full min-w-0 items-center justify-between gap-3 font-mono text-sm"
+        >
+          <span className="min-w-0">{t(requestKey(kind))}</span>
           <div className="flex items-center gap-1 shrink-0">
             <button
               type="button"
@@ -66,26 +71,6 @@ export function RequestToasts({ requests, onReply }: RequestToastsProps) {
       toast.dismiss(INCOMING_TOAST_ID);
     };
   }, [incoming, t]);
-
-  useEffect(() => {
-    if (!outgoing) return;
-    const kind = outgoing;
-    toast.custom(
-      () => (
-        <div role="status" data-pending={kind} className="toast w-[min(90vw,360px)] font-mono">
-          <span className="flex min-w-0 flex-col">
-            <span className="text-sm">{t(pendingKey(kind))}</span>
-            <span className="text-xs text-muted-foreground">{t('room.pending.waiting')}</span>
-          </span>
-          <Loader2 className="w-4 h-4 shrink-0 animate-spin motion-reduce:animate-none text-muted-foreground" aria-hidden="true" />
-        </div>
-      ),
-      { id: OUTGOING_TOAST_ID, duration: Infinity },
-    );
-    return () => {
-      toast.dismiss(OUTGOING_TOAST_ID);
-    };
-  }, [outgoing, t]);
 
   return null;
 }
