@@ -26,10 +26,10 @@ _(Written at the end of the run.)_
 
 ### Milestone 2 · Computer
 
-- [ ] 2A · Engine
-- [ ] 2B · Clock
-- [ ] 2C · Assistance
-- [ ] Integrator 2
+- [x] 2A · Engine
+- [x] 2B · Clock
+- [x] 2C · Assistance
+- [x] Integrator 2
 - [ ] Gate 2
 
 ### Milestone 3 · Rooms
@@ -103,6 +103,23 @@ _(One line each: where the design was silent, what was chosen and why.)_
 - Integrator 1: The tutorial starts only for a brand-new game started with the Start pill; `?` always shows it.
 - Integrator 1: Below the fold: history, support button, engine credit, izzardry footer. The language switcher shows on the idle start screen only.
 
+**Milestone 2**
+- 2A: The shipped engine file is the Web Worker itself (`new URL('engine/stockfish-19-lite-single.js', document.baseURI)`); it finds its .wasm beside it. Load progress comes from the engine's own progress port (download 0–0.9, 0.95 after uciok, 1 at readyok).
+- 2A: stop() cancels the running and queued searches; evaluate never rejects (null on failure, timeout or stop) and its timeout counts from the call, so queue wait and loading count against the blunder guard's 150 ms. A failed engine retries on the next call; init timeout 30 s since the last sign of life.
+- 2A: Analysis (evaluate, multiPv, humanized levels) always runs at Skill Level 20. Humanized picker: uniform choice within the budget of the best remaining line; level 1's hanging-queen rule is a 50 % coin flip. From level 3, never walk into mate in 1 (checked with chess.js; levels 5–11 re-search at full strength if needed).
+- 2A: Engine time in timed games: at most remaining/20 + increment/2, at least 50 ms; level 12 uses max(3 s, remaining/30) under that cap.
+- 2B: The clock dial has 9 minute values (1, 2, 3, 5, 10, 15, 20, 30, 60) and 9 increments (0, 1, 2, 3, 5, 10, 15, 20, 30), Ztyle 08's maximum for a 60 px radial dial. Minutes first, then increment in the same dial, with a caption chip.
+- 2B: Clocks are derived from the log plus a performance.now() turn timer (no tick accumulation); redraw every 100 ms with a clock, 250 ms without. A game lost on time shows 0.0 on the flagged side.
+- 2B: A premove fires only if exactly one opponent ply was added since it was queued; otherwise it is dropped silently. Promotion defaults to a queen. Room mode: the opponent's flag is claimed only after their clock has read zero for 2 s.
+- 2C: Blunder guard: scores clamped to ±1000 cp before the 300 cp test; both positions at depth 8; engine not ready → chess.js fallback (hanging-piece rule, ≥ 3 pawns worse than the best alternative; mate in 1 only if avoidable); engine late → move goes through. The guard never calls engine.stop().
+- 2C: Hint uses a full-strength multiPv(fen, 1, 12), independent of the level; taps after the second alternate from-square / target. Only the first hint in a position marks the game assisted.
+- 2C: Computer draw offer: considered only after 30 full moves; depth 12, 3 s timeout; no answer declines.
+- 2C: An illegal engine answer is replaced by a legal move so the game never stalls.
+- Integrator 2: The running turn's spent time is kept in sessionStorage `zhess:turn` (pagehide, hidden tab, Back) and restored on reload for the same game and position; time between pagehide and reload does not count (solo clocks pause when hidden).
+- Integrator 2: Start/Resume of a computer game waits on the Start pill (spinner with progress); a history card does not wait. Engine failure shows one calm toast (fixed id) with Try again.
+- Integrator 2: Hint bulb disabled while the computer is to move. Donation prompt fires 1.5 s after the win overlay appears. A tap on the stage with a premove queued only cancels the premove.
+- Integrator 2: No visible "computer thinking" indicator (the design names none); exposed as `data-computer` on the stage for tests.
+
 ## Deviations
 
 _(Where a design decision could not be built as stated: what was built instead, and why.)_
@@ -112,6 +129,11 @@ _(Where a design decision could not be built as stated: what was built instead, 
 - 1B: New URL parameter `r` (result of a finished shared game, e.g. `1-0.resign`) beyond DESIGN 13.2; without it a game that ended by resignation, time or agreement could not open in review. Never written for rooms.
 - 1B/1C: Seating lives in `useSeating` (1C), not in `useGameState`, to keep one writer of `zhess:seating`.
 - 1E: The Buy Me a Coffee button is drawn locally instead of loading the CDN image (PLAN rule 9: no outside services). Same link as Zudoku.
+- 2A: The engine smoke test loads `public/engine/stockfish-19-lite-single.js` (byte-identical to the npm package's copy) instead of a pack cached in node_modules/.cache. No `src/workers/engine.worker.ts`: the engine file is the worker (the plan allows this).
+- 2B: The dial cannot pick 45 or 90 minutes (9-item limit); URLs may still carry them. `usePremove` lives in `src/hooks/useClock.ts`.
+- 2C: The threat peek was already built in milestone 1; 2C added only a `threatSquares` helper. The guard runs against the real engine in an extra test, `src/lib/blunder.engine.test.ts`.
+- Integrator 2: The board does not show the dropped move during the blunder check (≤ 150 ms; about 10 ms with a warm engine), to avoid double or wrong screen-reader announcements. A small fix in useGameState outside the milestone's scope: the saved-games listener re-reads the store on subscribe (Start instead of Resume after Back from a linked game).
+- Integrator 2: Contract additions: `ClockPillAnchor.source`, `StripClock.ms` (rendered as `data-ms`); `stripClock` was replaced by `reviewClockView` in stage.ts.
 
 ## Open items
 
@@ -122,6 +144,9 @@ _(Features switched off in `src/lib/flags.ts`, tests marked `fixme`, and anythin
 - M1 visual notes for the final visual pass: start-screen chrome overlaps the blurred preview board at 1280×800 and in mobile landscape; Tailwind drops `duration-[400ms]` (TutorialOverlay) and `duration-[250ms]` (ResignUndoToast) as ambiguous; phone version stamp is centered, not bottom right; game-over summary line wraps awkwardly at 390 px; far clock in the landscape rail is not rotated face-to-face.
 - `og:image` / `twitter:image` are root-absolute (`/og-image.png`) until a deployed URL exists.
 - Build warns that one JS chunk is 561 kB (> 500 kB).
+- Level feel (DESIGN 17 risk 6) and blunder-guard latency on low-end phones (risk 5) are not play-tested; in Node the guard's depth-8 check takes 6–11 ms cold, ~1 ms warm.
+- Minor duplication left: DEFAULT_LEVEL in lib/levels.ts, lib/gameRecord.ts and components/start/options.ts; useComputer's toTc vs lib/clock.ts toTimeControl; useGameState's own Date.now turn timer is now unused by the page.
+- On phones the sonner toast covers the toolbar for its ~4 s lifetime (inherited Zudoku placement); for the final visual pass.
 
 ## Gate results
 
