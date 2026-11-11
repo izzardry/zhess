@@ -62,7 +62,9 @@ export interface GameOverOverlayProps {
   onPrimary: () => void;
   /** Rematch asked and waiting for the opponent: the primary button spins and is disabled. */
   primaryBusy?: boolean;
-  /** Shown under the buttons while `primaryBusy` (e.g. `Waiting for your opponent`). */
+  /** Rematch cannot be asked right now (the opponent is away): the button is disabled. */
+  primaryDisabled?: boolean;
+  /** Shown under the buttons while `primaryBusy` or `primaryDisabled` (e.g. `Waiting for your opponent`). */
   primaryNote?: string;
   /** Scrim tap or Escape: hide the overlay to look at the board. */
   onDismiss: () => void;
@@ -87,6 +89,7 @@ export function GameOverOverlay({
   onCopyPgn,
   onPrimary,
   primaryBusy = false,
+  primaryDisabled = false,
   primaryNote,
   onDismiss,
   delayMs = TINT_MS,
@@ -189,7 +192,7 @@ export function GameOverOverlay({
             ref={primaryRef}
             type="button"
             onClick={onPrimary}
-            disabled={primaryBusy}
+            disabled={primaryBusy || primaryDisabled}
             aria-busy={primaryBusy || undefined}
             className={cn('btn-primary', primaryBusy && 'opacity-60 cursor-wait')}
             data-action="primary"
@@ -198,7 +201,7 @@ export function GameOverOverlay({
             {mode === 'room' ? t('rematch') : t('newGame')}
           </button>
         </div>
-        {primaryBusy && primaryNote && (
+        {(primaryBusy || primaryDisabled) && primaryNote && (
           <p role="status" className="mt-4 text-xs text-muted-foreground" data-testid="primary-note">
             {primaryNote}
           </p>

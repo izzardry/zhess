@@ -11,6 +11,8 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { installPointerEvent, layoutGrid, tap } from '@/components/board/test-helpers';
+import { setSharedEngine } from '@/hooks/useZhessEngine';
+import { FakeEngine } from '@/lib/engine/fake';
 import { I18nProvider } from '@/lib/i18n';
 import { createRoomController, type RoomControllerApi } from '@/lib/room';
 import { createStore, memoryStorage } from '@/lib/storage';
@@ -202,6 +204,66 @@ describe('Index stage in a room', () => {
     expect(cellName('d4')).toMatch(/^white pawn/);
     // A whole series through the real controller: more than the default 5 s under a loaded run.
   }, 15_000);
+
+  it('a finished room game: the toolbar brings the overlay back, Rematch waits for an away opponent, review continues solo', async () => {
+    setSharedEngine(new FakeEngine());
+    renderStage('/?s=RMS009');
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+    const other = opponent('RMS009');
+    others.push(other);
+    await waitFor(() => expect(stage()).toHaveAttribute('data-room-presence', 'connected'));
+    await waitFor(() => expect(screen.queryByTestId('invite-sheet')).toBeNull());
+    move('e2', 'e4');
+    await waitFor(() => expect(other.snapshot.game.cursor).toBe(1));
+    act(() => {
+      expect(other.move('e7e5')).toBe(true);
+    });
+    await waitFor(() => expect(cellName('e5')).toMatch(/^black pawn/));
+    act(() => {
+      expect(other.resign()).toBe(true);
+    });
+    let over = await screen.findByRole('dialog', { name: /You won!/ }, { timeout: 4000 });
+    fireEvent.click(within(over).getByRole('button', { name: 'Rematch' }));
+    await waitFor(() => expect(other.snapshot.requests.incoming).toBe('rematch'));
+
+    // Dismissed while the rematch waits: the toolbar's flag slot shows it and brings the overlay back.
+    fireEvent.keyDown(over, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: /You won!/ })).toBeNull());
+    const pending = within(toolbar()).getByRole('button', { name: 'Rematch requested' });
+    expect(pending).toHaveAttribute('data-pending', 'true');
+    fireEvent.click(pending);
+    over = await screen.findByRole('dialog', { name: /You won!/ }, { timeout: 4000 });
+    expect(within(over).getByRole('button', { name: 'Rematch' })).toBeDisabled();
+    act(() => {
+      expect(other.reply('rematch', false)).toBe(true);
+    });
+    expect(await screen.findByText('Rematch declined')).toBeInTheDocument();
+    await waitFor(() => expect(within(over).getByRole('button', { name: 'Rematch' })).toBeEnabled());
+
+    // The opponent leaves: Rematch cannot be asked, and says why instead of doing nothing.
+    act(() => other.leave());
+    await waitFor(() => expect(stage()).not.toHaveAttribute('data-room-presence', 'connected'), { timeout: 20_000 });
+    await waitFor(() => expect(within(over).getByRole('button', { name: 'Rematch' })).toBeDisabled());
+    expect(within(over).getByRole('status')).toHaveTextContent('Waiting for opponent');
+
+    // Review of the room game offers Continue from here: a solo game from the shown position.
+    fireEvent.keyDown(over, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: /You won!/ })).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Show all moves' }));
+    const list = await screen.findByRole('list', { name: 'Moves' });
+    fireEvent.click(within(list).getByRole('button', { name: /^Go to move 1\. / }));
+    expect(stage()).toHaveAttribute('data-phase', 'review');
+    fireEvent.click(within(toolbar()).getByRole('button', { name: 'Continue from here' }));
+    await waitFor(() => expect(stage()).toHaveAttribute('data-phase', 'playing'));
+    expect(toolbar()).not.toHaveAttribute('data-mode', 'room');
+    expect(stage()).not.toHaveAttribute('data-room-presence');
+    expect(cellName('e4')).toMatch(/^white pawn/);
+    expect(cellName('e5')).not.toMatch(/^black pawn/);
+    expect(within(screen.getByRole('group', { name: 'Game info' })).queryByText('RMS009')).toBeNull();
+    // The room itself is untouched.
+    expect(localStorage.getItem('zhess:rooms')).toContain('RMS009');
+    setSharedEngine(null);
+  }, 30_000);
 
   it('an invite link opens the room at once and joins it', async () => {
     // The host device (seat 0) creates the room with its own storage.

@@ -10,6 +10,9 @@
  * | Helpers  | yes                 | yes        | yes                | yes                          |
  * | Seating  | hidden              | yes        | hidden             | flip board                   |
  * | Flag     | draw / hold: resign | hold: resign | draw / hold: resign | continue from here        |
+ *
+ * In a room whose current game is over the flag slot reopens the game-over overlay, where the
+ * rematch is asked for; it pulses while this device's rematch request waits (DESIGN 9.7).
  * | Share    | yes                 | yes        | invite link        | link or PGN                  |
  *
  * Presentational: the parent decides what each callback does (e.g. how far undo goes).
@@ -24,6 +27,7 @@ import {
   Loader2,
   Redo2,
   RefreshCcw,
+  Repeat,
   Share2,
   ShieldCheck,
   ShieldOff,
@@ -97,6 +101,10 @@ export interface StatusBarProps {
   flagPending?: boolean;
   /** Review: the flag slot becomes "continue from here". Undefined hides it. */
   onContinue?: () => void;
+  /** Room, game over: the flag slot becomes Rematch (reopens the game-over overlay). */
+  onRematch?: () => void;
+  /** Room: this device's rematch request is outstanding (the Rematch slot shows it). */
+  rematchPending?: boolean;
 
   /** Share the game link (or room invite). */
   onShare: () => void;
@@ -139,6 +147,8 @@ export function StatusBar(props: StatusBarProps) {
     flagDisabled,
     flagPending,
     onContinue,
+    onRematch,
+    rematchPending,
     onShare,
     onCopyPgn,
   } = props;
@@ -250,6 +260,17 @@ export function StatusBar(props: StatusBarProps) {
         />,
       );
     }
+  } else if (onRematch) {
+    out.push(
+      <ToolbarButton
+        key="flag"
+        label={rematchPending ? t('room.pending.rematch') : t('rematch')}
+        icon={<Repeat className={cn(rematchPending && PENDING)} aria-hidden="true" />}
+        onClick={onRematch}
+        data-slot="rematch"
+        data-pending={rematchPending ? 'true' : undefined}
+      />,
+    );
   } else if (onResign || onOfferDraw) {
     const local = mode === 'local';
     out.push(

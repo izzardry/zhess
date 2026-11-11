@@ -71,6 +71,18 @@ describe('GameOverOverlay', () => {
     expect(screen.getByRole('button', { name: 'Rematch' })).toHaveAttribute('aria-busy', 'true');
   });
 
+  it('room: a rematch that cannot be asked (opponent away) is disabled, with its note', () => {
+    const note = 'Waiting for opponent';
+    const p = props({ mode: 'room', primaryDisabled: true, primaryNote: note });
+    renderWithI18n(<GameOverOverlay {...p} />);
+    const button = screen.getByRole('button', { name: 'Rematch' });
+    expect(button).toBeDisabled();
+    expect(button).not.toHaveAttribute('aria-busy');
+    expect(screen.getByRole('status')).toHaveTextContent(note);
+    fireEvent.click(button);
+    expect(p.onPrimary).not.toHaveBeenCalled();
+  });
+
   it('actions call back; the scrim and Escape dismiss, the content does not', () => {
     const p = props();
     renderWithI18n(<GameOverOverlay {...p} />);

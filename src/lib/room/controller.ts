@@ -11,8 +11,13 @@
  *    - Failure with a locked room: notice `challenge-failed`, nothing about the game is sent, and the
  *      transport reconnects after a backoff so the real opponent can get through. A `join` that
  *      follows on the same channel is still treated as a rejoin request.
- *    - Failure with an open (provisional) room: the codes collided with another room. The dialer
- *      drops its provisional room; either side then asks for a seat with `join`.
+ *    - Failure with an open (provisional) room against another open room: both devices started the
+ *      code before either had synced (the joiner typed the code while the creator was away). The
+ *      room that was created first wins, then the one with more plies, and only then the anchor
+ *      (`hello` carries `open`, `born` and `len` for this). Anchor and dialer are transport roles
+ *      only (DESIGN 9.2), so the creator keeps seat 0, its color, time control and offline moves
+ *      whichever device came online first. The losing device drops its provisional room and asks
+ *      for a seat with `join`; the winner welcomes it.
  * 3. A device without a record sends `join`. The keyholder answers:
  *    - open room (never synced): `welcome {key, seat, tc, color}` — the first join (DESIGN 9.3);
  *    - locked room: a pending `rejoin` request (`requests.incoming = 'rejoin'`); `reply('rejoin', ok)`
@@ -130,6 +135,26 @@ interface Ctx {
 /** `end` as this controller sends it: the contract's fields plus the context (contract addition). */
 type EndOut = EndMsg & { epoch?: number; len?: number };
 
+/**
+ * `hello` as this controller sends it (contract addition): with a room, `open` says whether it was
+ * never synced, and an open room also carries its `createdAt` (`born`) and the current game's
+ * length (`len`), so a collision of two provisional rooms is settled by the game, not by the
+ * transport role.
+ */
+type HelloOut = HelloMsg & { open?: boolean; born?: number; len?: number };
+
+/**
+ * Whether this device's provisional room beats the other side's in a collision of two open rooms:
+ * the older room (the creator's) wins, then the one with more plies, then the anchor.
+ */
+export function provisionalWins(mine: { born: number; len: number }, theirs: { born?: unknown; len?: unknown }, role: TransportRole | null): boolean {
+  const born = typeof theirs.born === 'number' && Number.isFinite(theirs.born) ? theirs.born : null;
+  const len = isInt(theirs.len) ? theirs.len : null;
+  if (born !== null && born !== mine.born) return mine.born < born;
+  if (len !== null && len !== mine.len) return mine.len > len;
+  return role === 'anchor';
+}
+
 const isInt = (x: unknown): x is number => typeof x === 'number' && Number.isInteger(x) && x >= 0;
 const isSeat = (x: unknown): x is Seat => x === 0 || x === 1;
 
@@ -200,6 +225,13 @@ class Controller implements RoomControllerApi {
   /* room */
   private room: Room | null = null;
   private logs: GameLog[] = [];
+  private logsFrozenFrom: GameLog[] | null = null;
+  private logsFrozen: readonly GameLog[] = Object.freeze([]);
+  /**
+   * After a grant: games numbered below this were already counted in the granted score. They may
+   * still arrive (a grant split over `logs` messages) and must not be added to the score again.
+   */
+  private scoreFloor = 0;
   private game: Game;
 
   /* transport */
@@ -549,6 +581,7 @@ class Controller implements RoomControllerApi {
         score = [this.room.score[0], this.room.score[1]];
         for (const l of changed) {
           const was = before.get(l.n);
+          if (!was && l.n < this.scoreFloor) continue; // counted in the granted score
           const add = gamePoints(l);
           const sub = was ? gamePoints(was) : [0, 0];
           score[0] += add[0] - sub[0];
@@ -676,7 +709,16 @@ class Controller implements RoomControllerApi {
       stall: 0,
     };
     this.bindOnHead = false;
-    this.send({ t: 'hello', v: V, hasKey: !!this.room, nonce: this.round.nonce } satisfies HelloMsg);
+    const room = this.room;
+    const hello: HelloOut = { t: 'hello', v: V, hasKey: !!room, nonce: this.round.nonce };
+    if (room) {
+      hello.open = room.lastSeenAt === 0;
+      if (hello.open) {
+        hello.born = room.createdAt;
+        hello.len = this.cur()?.plies.length ?? 0;
+      }
+    }
+    this.send(hello);
     this.startPing();
   }
 
@@ -873,9 +915,18 @@ class Controller implements RoomControllerApi {
       return;
     }
     if (room.lastSeenAt === 0) {
-      // A provisional room met another room of the same code. The dialer gives its room up;
-      // either way this device now asks the other side for a seat.
-      if (this.role === 'dialer') this.discardProvisional();
+      // A provisional room met another room of the same code. Against a locked room this device
+      // gives its room up and asks for a seat (a rejoin request there). Against another open room
+      // the game decides who keeps it, not the transport role (DESIGN 9.2, 9.3).
+      const peer = (r.peer ?? {}) as HelloOut;
+      const peerOpen = peer.open !== false;
+      const mine = { born: room.createdAt, len: this.cur()?.plies.length ?? 0 };
+      if (peerOpen && provisionalWins(mine, peer, this.role)) {
+        r.stage = 'hello'; // keep the room: wait for the other device's join and welcome it
+        this.emit();
+        return;
+      }
+      this.discardProvisional();
       r.stage = 'joining';
       this.send({ t: 'join', v: V });
       this.emit();
@@ -998,9 +1049,15 @@ class Controller implements RoomControllerApi {
       this.discardProvisional();
     }
     const at = this.wall();
-    this.room = { code: this.code, key: m.key, seat: m.seat, createdAt: at, lastSeenAt: Math.max(1, at), score, games: [] };
+    this.room = { code: this.code, key: m.key, seat: m.seat, createdAt: at, lastSeenAt: Math.max(1, at), score: [0, 0], games: [] };
     this.logs = [];
     this.setLogs(res.adopt ?? []);
+    // The granted score already counts the adopted games (and any the survivor no longer holds):
+    // it replaces what setLogs added up, so nothing is counted twice (DESIGN 9.5).
+    this.room = { ...(this.room as Room), score };
+    this.saveRoom();
+    this.scoreFloor = (res.adopt ?? []).reduce((min, l) => Math.min(min, l.n), Infinity);
+    if (!Number.isFinite(this.scoreFloor)) this.scoreFloor = 0;
     this.authenticate();
   }
 
@@ -1495,13 +1552,22 @@ class Controller implements RoomControllerApi {
       failure: this.failure,
       phase: this.phase(),
       live: this.live,
-      logs: Object.freeze([...this.logs]),
+      logs: this.frozenLogs(),
       myTurn,
       canMove: myTurn && locked === null,
       canAsk: Object.freeze({ takeback: this.canAsk('takeback'), draw: this.canAsk('draw'), rematch: this.canAsk('rematch') }),
       failureKind: this.failureKind,
       lastSeenAt: room?.lastSeenAt ?? 0,
     });
+  }
+
+  /** The snapshot's `logs`: the same frozen array until the logs change (no needless re-renders). */
+  private frozenLogs(): readonly GameLog[] {
+    if (this.logsFrozenFrom !== this.logs) {
+      this.logsFrozenFrom = this.logs;
+      this.logsFrozen = Object.freeze([...this.logs]);
+    }
+    return this.logsFrozen;
   }
 
   private emit(): void {

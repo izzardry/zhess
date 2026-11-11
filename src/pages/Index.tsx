@@ -213,8 +213,10 @@ export default function Index() {
   // In a room the controller times the turn (DESIGN 9.8): external mode with its stamps, which use
   // the same performance.now() clock. Its flag rule (own at zero, the opponent's 2 s past zero)
   // is the controller's too; `timeout` hands the flag to it.
+  // A move-list jump in a live game (review) does not stop the clock: solo clocks pause only when
+  // the tab is hidden or on Back (DESIGN 11), and Back leaves the game (phase `start`).
   const clock = useClock(sessionGame, session?.tc ?? null, {
-    active: phase === 'playing',
+    active: phase !== 'start',
     key: sessionId,
     onFlag: timeout,
     initialTurnMs: banked.current.ms,
@@ -261,7 +263,8 @@ export default function Index() {
   const computer = useComputer({
     engine,
     game: sessionGame,
-    enabled: flags.computer && mode === 'computer' && phase === 'playing',
+    // The computer plays on while the player looks back through the moves.
+    enabled: flags.computer && mode === 'computer' && phase !== 'start',
     computerColor: session ? other(session.color) : null,
     level: session?.level ?? DEFAULT_LEVEL,
     tc: session?.tc ?? null,
@@ -384,9 +387,10 @@ export default function Index() {
   const handleNewGame = useCallback(() => {
     // A room plays on in the same room: Rematch asks the opponent (DESIGN 8.4, 9.7). The overlay
     // stays, its button showing the pending state, until game n+1 starts or the answer is No.
+    // When it cannot be asked (the opponent is away) the button is disabled with a note.
     const r = gsRef.current.room;
     if (r) {
-      r.ask('rematch');
+      if (r.state?.canAsk.rematch) r.ask('rematch');
       return;
     }
     setOverlay(false);
@@ -502,11 +506,10 @@ export default function Index() {
   }, []);
   const manual = room?.manual;
   const manualStep = manual?.step ?? 'idle';
+  // This device answers an offer link (`x`) and the exchange is still running.
+  const manualGuestActive = manual?.role === 'guest' && manualStep !== 'idle' && manualStep !== 'connected';
   // An offer link (`x`) or an answer link (`y`) opened here shows its step without a tap.
-  const manualAuto =
-    manualStep === 'answer' ||
-    manualStep === 'handover' ||
-    (manual?.role === 'guest' && (manualStep === 'preparing' || manualStep === 'error'));
+  const manualAuto = manualGuestActive || manualStep === 'handover';
   // The sheets are modal: they step aside once the manual channel is open and while a request
   // waits for an answer, so its toast (e.g. Allow for a rejoin, DESIGN 9.5) can be reached.
   const requestWaiting = !!rs?.requests.incoming;
@@ -514,7 +517,7 @@ export default function Index() {
   const inviteShown = inviteOpen && !manualShown && !requestWaiting;
   // The failure toast (with its own `Connect manually`) steps aside while a sheet that shows the
   // cause or the step is open, and never shows to the guest of a manual exchange (an `x` link).
-  const failureQuiet = inviteShown || manualShown || (manual?.role === 'guest' && manualStep !== 'idle' && manualStep !== 'connected');
+  const failureQuiet = inviteShown || manualShown || manualGuestActive;
   // Done once its channel is open: a later loss starts from `Connect manually` again, not this sheet.
   useEffect(() => {
     if (manualStep === 'connected') setManualOpen(false);
@@ -661,10 +664,13 @@ export default function Index() {
 
   const end = session?.game.end;
   const tint = end && endedHere && session ? tintFor(end, session.mode, session.color) : null;
-  const canContinue = useMemo(
-    () => phase === 'review' && !!view && mode !== 'room' && canContinueFrom(view),
-    [phase, view, mode],
-  );
+  // A room whose current game is over: Rematch lives on the overlay, and the toolbar's flag slot
+  // brings the overlay back after it was dismissed, pulsing while this device's request waits.
+  const roomOver = roomMode && !!end && phase === 'playing';
+  const rematchPending = roomMode && rs?.requests.outgoing === 'rematch';
+  const rematchBlocked = roomMode && !rematchPending && !rs?.canAsk.rematch;
+  // Room games too: the new game is a solo one (DESIGN 4.2, 12.3: never forked into a room).
+  const canContinue = useMemo(() => phase === 'review' && !!view && canContinueFrom(view), [phase, view]);
 
   return (
     <PieceRenderProvider render={renderPiece}>
@@ -702,6 +708,7 @@ export default function Index() {
                 label={gs.startPill.label}
                 onClick={() => void handleStart()}
                 loading={engineStart.loading}
+                onCancel={cancelEngineStart}
                 progress={engineStart.progress}
                 disabled={!isStart || animating}
               />
@@ -781,6 +788,8 @@ export default function Index() {
               onResign={handleResign}
               flagDisabled={!!end || (roomMode && !roomResignable(rs))}
               flagPending={roomMode && rs?.requests.outgoing === 'draw'}
+              onRematch={roomOver ? () => setOverlay(true) : undefined}
+              rematchPending={rematchPending}
               onContinue={canContinue ? handleContinue : undefined}
               onShare={roomMode && phase !== 'review' ? () => setInviteOpen(true) : handleShare}
               onCopyPgn={handleCopyPgn}
@@ -801,8 +810,9 @@ export default function Index() {
             onShare={handleShare}
             onCopyPgn={handleCopyPgn}
             onPrimary={handleNewGame}
-            primaryBusy={roomMode && rs?.requests.outgoing === 'rematch'}
-            primaryNote={roomMode ? t('room.pending.waiting') : undefined}
+            primaryBusy={rematchPending}
+            primaryDisabled={rematchBlocked}
+            primaryNote={rematchPending ? t('room.pending.waiting') : rematchBlocked && rs?.presence !== 'connected' ? t('room.presence.waiting') : undefined}
             onDismiss={() => setOverlay(false)}
           />
         )}
@@ -810,6 +820,7 @@ export default function Index() {
         {room && (
           <>
             <RoomToasts
+              room={room.code}
               onNotice={room.onNotice}
               requests={rs?.requests}
               onReply={room.reply}

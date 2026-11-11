@@ -62,6 +62,19 @@ describe('StatusBar slots per mode (DESIGN 4.2)', () => {
     expect(screen.getByRole('button', { name: 'Share invite link' })).toBeInTheDocument();
   });
 
+  it('room, game over: the flag slot becomes Rematch, which pulses while the request waits', () => {
+    const onRematch = vi.fn();
+    const { rerender } = renderWithI18n(<StatusBar {...props({ mode: 'room', onRematch })} />);
+    expect(slots()).toEqual(['undo', 'helpers', 'rematch', 'share']);
+    fireEvent.click(screen.getByRole('button', { name: 'Rematch' }));
+    expect(onRematch).toHaveBeenCalledTimes(1);
+    rerender(<StatusBar {...props({ mode: 'room', onRematch, rematchPending: true })} />);
+    const pending = screen.getByRole('button', { name: 'Rematch requested' });
+    expect(pending).toHaveAttribute('data-pending', 'true');
+    fireEvent.click(pending);
+    expect(onRematch).toHaveBeenCalledTimes(2);
+  });
+
   it('room: an outstanding takeback is shown and disables undo', () => {
     renderWithI18n(<StatusBar {...props({ mode: 'room', undoPending: true })} />);
     expect(screen.getByRole('button', { name: 'Takeback requested' })).toBeDisabled();

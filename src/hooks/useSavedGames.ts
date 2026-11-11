@@ -7,7 +7,8 @@
  * most recent cards.
  *
  * Rooms (DESIGN 9.5, 12.2): `rooms` holds the room records (game number and score on the cards).
- * Deleting a room game removes the local room record as well; its undo puts the record back.
+ * Deleting a room game removes the local room record as well; undoing any game deleted from that
+ * room while its record was gone puts the record back.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -58,8 +59,11 @@ export function useSavedGames(options: UseSavedGamesOptions = {}): UseSavedGames
   const nowOpt = options.now;
   const [games, setGames] = useState<SavedGame[]>(() => store.games());
   const [rooms, setRooms] = useState<Room[]>(() => store.rooms());
-  /** Room records removed with a game, by that game's id, for its undo. */
-  const removedRooms = useRef(new Map<string, Room>());
+  /**
+   * Room records removed with a game, by room code, with the ids of every game of that room deleted
+   * while the record was gone: undoing any of them brings the record back.
+   */
+  const removedRooms = useRef(new Map<string, { room: Room; ids: Set<string> }>());
 
   const refresh = useCallback(() => {
     setGames(store.games());
@@ -84,7 +88,9 @@ export function useSavedGames(options: UseSavedGamesOptions = {}): UseSavedGames
       const removed = store.deleteGame(id);
       if (removed?.mode === 'room') {
         const room = store.deleteRoom(removed.code);
-        if (room) removedRooms.current.set(removed.id, room);
+        const held = removedRooms.current.get(removed.code);
+        if (room) removedRooms.current.set(removed.code, { room, ids: new Set([removed.id]) });
+        else if (held) held.ids.add(removed.id);
       }
       notifySavedGames();
       return removed;
@@ -97,11 +103,11 @@ export function useSavedGames(options: UseSavedGamesOptions = {}): UseSavedGames
       const list: readonly SavedGame[] = Array.isArray(g) ? g : [g as SavedGame];
       for (const x of list) {
         store.restoreGame(x);
-        const room = removedRooms.current.get(x.id);
-        if (!room) continue;
-        removedRooms.current.delete(x.id);
+        const held = x.mode === 'room' ? removedRooms.current.get(x.code) : undefined;
+        if (!held || !held.ids.has(x.id)) continue;
+        removedRooms.current.delete(x.code);
         // A room started again under this code since the delete keeps its own record.
-        if (!store.rooms().some((r) => r.code === room.code)) store.saveRoom(room);
+        if (!store.rooms().some((r) => r.code === held.room.code)) store.saveRoom(held.room);
       }
       notifySavedGames();
     },

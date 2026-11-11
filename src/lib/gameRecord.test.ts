@@ -3,6 +3,7 @@ import {
   DEFAULT_OPPONENT,
   applyEnd,
   applyGoto,
+  isRunning,
   applyMove,
   applyRedo,
   applyReopen,
@@ -299,6 +300,23 @@ describe('review', () => {
     expect(applyGoto(a, 99).review).toBe(7);
     expect(applyMove(a, 'e2e4', 1, 1)).toBeNull();
     expect(applyUndo(a, 1)).toBeNull();
+  });
+
+  it('a live game runs on in review: the computer still moves and a flag still falls (DESIGN 11)', () => {
+    let s = session({ mode: 'computer', color: 'w', tc: '1+0' });
+    for (const m of ['e2e4', 'e7e5', 'g1f3']) s = applyMove(s, m, 1, 1)!;
+    const r = applyGoto(s, 1);
+    expect(r.review).toBe(1);
+    expect(isRunning(r)).toBe(true);
+    // The computer (black) answers; the player stays at the reviewed move.
+    const after = applyMove(r, 'b8c6', 500, 2)!;
+    expect(after.game.cursor).toBe(4);
+    expect(after.review).toBe(1);
+    // The player's own moves still need the live board.
+    expect(applyMove(after, 'f1c4', 1, 3)).toBeNull();
+    const flagged = applyTimeout(after, 'w', 4)!;
+    expect(flagged.game.end).toMatchObject({ by: 'time' });
+    expect(isRunning(flagged)).toBe(false);
   });
 
   it('reaching the live position of an unfinished game leaves review', () => {

@@ -121,6 +121,28 @@ describe('useSavedGames', () => {
     expect(result.current.games.map((g) => g.id)).toEqual(['RM0001.2', 'RM0001.1']);
   });
 
+  it('undoing any game deleted from a room brings its record back, not only the first one deleted', () => {
+    const room = { code: 'RM0003', key: 'c'.repeat(22), seat: 0 as const, createdAt: NOW, lastSeenAt: NOW, score: [2, 0] as [number, number], games: ['RM0003.1', 'RM0003.2'] };
+    store.saveRoom(room);
+    store.saveGame(game('RM0003.1', NOW - 2, { code: 'RM0003', mode: 'room', result: '1-0', by: 'resign', room: { n: 1, epoch: 0 } }));
+    store.saveGame(game('RM0003.2', NOW - 1, { code: 'RM0003', mode: 'room', room: { n: 2, epoch: 0 } }));
+    const { result } = renderHook(() => useSavedGames({ store }));
+    let first: SavedGame | undefined;
+    let second: SavedGame | undefined;
+    act(() => {
+      first = result.current.remove('RM0003.1');
+    });
+    act(() => {
+      second = result.current.remove('RM0003.2');
+    });
+    expect(first?.id).toBe('RM0003.1');
+    expect(store.rooms()).toEqual([]);
+    // Only the second deletion is undone: the room's record comes back with it.
+    act(() => result.current.restore(second!));
+    expect(store.rooms()).toEqual([room]);
+    expect(result.current.games.map((g) => g.id)).toEqual(['RM0003.2']);
+  });
+
   it('undo does not overwrite a room started again under the same code', () => {
     const old = { code: 'RM0002', key: 'a'.repeat(22), seat: 0 as const, createdAt: NOW, lastSeenAt: NOW, score: [0, 0] as [number, number], games: ['RM0002.1'] };
     store.saveRoom(old);

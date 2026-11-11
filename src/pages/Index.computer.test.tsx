@@ -345,6 +345,77 @@ describe('Index stage against the computer', () => {
     expect(screen.queryByText('Did you enjoy your first round?')).toBeNull();
   });
 
+  // Ztyle 09: a click on the spinner cancels and restores the previous state.
+  it('a tap on the loading Start pill cancels the start and restores the idle pill', async () => {
+    setSharedEngine(new FakeEngine({ loadMs: 300 }));
+    renderStage('/?o=c&d=1&w=w');
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+    const pill = screen.getByTestId('start-pill');
+    expect(pill).toHaveAttribute('aria-busy', 'true');
+    expect(pill.getAttribute('title')).toMatch(/Tap to cancel/);
+    fireEvent.click(pill);
+    expect(pill).not.toHaveAttribute('aria-busy');
+    expect(pill).not.toHaveAttribute('title');
+    // The engine finishes loading in the background; the game does not start by itself.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 450));
+    });
+    expect(stage()).toHaveAttribute('data-phase', 'start');
+    // A later Start uses the loaded engine at once.
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+    await waitFor(() => expect(stage()).toHaveAttribute('data-phase', 'playing'));
+  });
+
+  // DESIGN 11: solo clocks pause only when the tab is hidden or on Back, not in review.
+  it('the computer plays on while the player looks back through the moves of a live game', async () => {
+    setSharedEngine(new FakeEngine({ delayMs: 100 }));
+    await startComputer('/?s=REVW02&o=c&d=1&w=w');
+    move('e2', 'e4');
+    await waitFor(() => expect(screen.getByTestId('board-live')).toHaveTextContent(/^Black: /), { timeout: 3000 });
+    move('d2', 'd4');
+    await waitFor(() => expect(cellName('d4')).toMatch(/^white pawn, d4/));
+    // Jump back to 1. e4 through the move list while the computer thinks.
+    fireEvent.click(screen.getByRole('button', { name: 'Show all moves' }));
+    const list = await screen.findByRole('list', { name: 'Moves' });
+    fireEvent.click(within(list).getByRole('button', { name: /^Go to move 1\. / }));
+    expect(stage()).toHaveAttribute('data-phase', 'review');
+    expect(cellName('d4')).not.toMatch(/^white pawn/);
+    // The computer's reply lands in the game; the review stays where the player is.
+    await waitFor(
+      () => {
+        const g = JSON.parse(localStorage.getItem('zhess:games') ?? '[]').find((x: { id: string }) => x.id === 'REVW02');
+        expect(g?.ms).toHaveLength(4);
+      },
+      { timeout: 3000 },
+    );
+    expect(stage()).toHaveAttribute('data-phase', 'review');
+    fireEvent.keyDown(window, { key: 'End' });
+    expect(stage()).toHaveAttribute('data-phase', 'playing');
+    expect(cellName('d4')).toMatch(/^white pawn, d4/);
+  });
+
+  it('the clock keeps running while the player reviews a live timed game', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'setInterval', 'clearTimeout', 'clearInterval', 'performance', 'Date'] });
+    // Pass-and-play, 1+0: both first moves are untimed; white's second move is on the clock.
+    renderStage(`/?s=REVW01&p=1&o=l&t=1%2B0&m=${urlOf(['e2e4', 'e7e5'])}`);
+    const white = () => screen.getAllByRole('timer').find((el) => el.closest('[data-color="w"]'))!;
+    act(() => vi.advanceTimersByTime(10_000));
+    expect(white()).toHaveTextContent('0:50');
+    fireEvent.click(screen.getByRole('button', { name: 'Show all moves' }));
+    await act(async () => {
+      vi.advanceTimersByTime(50);
+    });
+    const list = screen.getByRole('list', { name: 'Moves' });
+    fireEvent.click(within(list).getByRole('button', { name: /^Go to move 1\. / }));
+    expect(stage()).toHaveAttribute('data-phase', 'review');
+    act(() => vi.advanceTimersByTime(20_000));
+    fireEvent.keyDown(window, { key: 'End' });
+    expect(stage()).toHaveAttribute('data-phase', 'playing');
+    act(() => vi.advanceTimersByTime(200));
+    // The 20 s spent in review count.
+    expect(white()).toHaveTextContent(/^0:(30|29)$/);
+  });
+
   it('an engine that cannot load keeps the start screen and shows a calm toast with Try again', async () => {
     setSharedEngine(new FakeEngine({ loadResult: 'fail' }));
     renderStage('/?o=c&d=1&w=w');

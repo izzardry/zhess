@@ -285,9 +285,26 @@ export function canPlay(s: GameSession | null): s is GameSession {
   return !!s && s.review === null && !s.game.end && s.mode !== 'room';
 }
 
-/** Plays `uci` with `ms` used. Null if the move is illegal or the board is not playable. */
+/**
+ * Whether the solo game is running: not over, not a room. Unlike `canPlay` this ignores review: a
+ * move-list jump in a live game does not stop its clock or the computer (DESIGN 11: solo clocks
+ * pause only when the tab is hidden or on Back).
+ */
+export function isRunning(s: GameSession | null): s is GameSession {
+  return !!s && !s.game.end && s.mode !== 'room';
+}
+
+/** The computer is to move in a running game against it (it moves on while the player reviews). */
+function computerToMove(s: GameSession): boolean {
+  return isRunning(s) && s.mode === 'computer' && s.game.turn !== s.color;
+}
+
+/**
+ * Plays `uci` with `ms` used. Null if the move is illegal or the board is not playable. The
+ * computer's move also lands while the player looks back through the moves (review stays put).
+ */
 export function applyMove(s: GameSession, uci: string, ms: number, now: number): GameSession | null {
-  if (!canPlay(s)) return null;
+  if (!canPlay(s) && !computerToMove(s)) return null;
   try {
     return changed(s, zhess.play(s.game, uci, ms), now);
   } catch {
@@ -327,9 +344,12 @@ export function applyEnd(s: GameSession, end: GameEnd, now: number): GameSession
   return changed(s, zhess.end(s.game, end.result, end.by), now);
 }
 
-/** `flagged` ran out of time: a loss, or a draw when the other side cannot mate (DESIGN 8.2). */
+/**
+ * `flagged` ran out of time: a loss, or a draw when the other side cannot mate (DESIGN 8.2). The
+ * clock runs on in review, so a flag can fall there too.
+ */
 export function applyTimeout(s: GameSession, flagged: Color, now: number): GameSession | null {
-  if (!canPlay(s)) return null;
+  if (!isRunning(s)) return null;
   return changed(s, zhess.timeout(s.game, flagged), now);
 }
 

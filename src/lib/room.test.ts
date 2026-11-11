@@ -11,6 +11,7 @@ import { createStore, memoryStorage } from './storage';
 import { appendPly, endLog, generateKey, hashLog, logToSaved, makeHead, newLog, proveSeat, roomGameId, roomScore, scoreView } from './sync';
 import zhess from './zhess';
 import { createRoomController, ROOM_DEFAULTS } from './room';
+import { provisionalWins } from './room/controller';
 import { createHarness, fakePair, scriptPeer, seeded, WALL0, type Device, type Harness } from './room/testkit';
 
 const CODE = 'K7QW2M';
@@ -171,6 +172,48 @@ describe('join and lock', () => {
     expect(saved(B)).toEqual([expect.objectContaining({ id: `${CODE}.1`, color: 'b', tc: '3+2' })]);
   });
 
+  it('the joiner typed the code while the creator was away: the creator keeps seat 0, its settings and its offline move', async () => {
+    const h = createHarness({ code: CODE });
+    // The creator starts an untimed room as white, moves while waiting, and closes the app.
+    const A = h.device('A', { create: { tc: null, color: 'w' } });
+    await h.settle();
+    expect(A.ctrl.move('e2e4')).toBe(true);
+    await h.settle();
+    A.ctrl.leave();
+    await h.advance(60_000);
+    // The friend types the code with Room selected (their own settings) and is online first:
+    // their device holds the anchor id with a provisional room of its own.
+    const B = h.device('B', { create: { tc: '3+2', color: 'w' } });
+    await h.settle();
+    expect(B.ctrl.snapshot).toMatchObject({ role: 'anchor', seat: 0, lock: 'open' });
+    // The creator comes back and dials.
+    const A2 = h.device('A2', { storage: A.storage });
+    await h.settle();
+    expect(A2.ctrl.snapshot).toMatchObject({ role: 'dialer', live: true, seat: 0, color: 'w', lock: 'locked', tc: null });
+    expect(B.ctrl.snapshot).toMatchObject({ role: 'anchor', live: true, seat: 1, color: 'b', lock: 'locked', tc: null });
+    expect(ucis(A2)).toEqual(['e2e4']);
+    expect(ucis(B)).toEqual(['e2e4']);
+    expect(B.ctrl.snapshot.myTurn).toBe(true);
+    expect(room(B)?.key).toBe(room(A2)?.key);
+    expect(room(B)).toMatchObject({ seat: 1 });
+    expect(saved(B)).toEqual([expect.objectContaining({ id: `${CODE}.1`, color: 'b', tc: null })]);
+    expect(A2.kinds()).not.toContain('restored-from-opponent');
+  });
+
+  it('a collision of two provisional rooms is settled by the game, not by the transport role', () => {
+    // The older room (the creator's) wins whatever the role.
+    expect(provisionalWins({ born: 100, len: 0 }, { born: 200, len: 3 }, 'dialer')).toBe(true);
+    expect(provisionalWins({ born: 200, len: 3 }, { born: 100, len: 0 }, 'anchor')).toBe(false);
+    // Same age: the room with moves wins; then the anchor.
+    expect(provisionalWins({ born: 100, len: 1 }, { born: 100, len: 0 }, 'dialer')).toBe(true);
+    expect(provisionalWins({ born: 100, len: 0 }, { born: 100, len: 1 }, 'anchor')).toBe(false);
+    expect(provisionalWins({ born: 100, len: 0 }, { born: 100, len: 0 }, 'anchor')).toBe(true);
+    expect(provisionalWins({ born: 100, len: 0 }, { born: 100, len: 0 }, 'dialer')).toBe(false);
+    // A peer that sent nothing to compare: the role decides.
+    expect(provisionalWins({ born: 100, len: 0 }, {}, 'anchor')).toBe(true);
+    expect(provisionalWins({ born: 100, len: 0 }, { born: 'x', len: -1 }, 'dialer')).toBe(false);
+  });
+
   it('neither device holds the room (two invite links): the anchor creates it', async () => {
     const h = createHarness({ code: CODE });
     const A = h.device('A');
@@ -271,6 +314,55 @@ describe('rejoin', () => {
       expect(ucis(A)).toEqual(['d2d4', 'd7d5', 'c2c4', 'e7e6']);
     });
   }
+
+  it('a grant whose games do not start at game 1 (older games evicted) restores the score without counting twice', async () => {
+    const h = createHarness({ code: CODE });
+    const key = generateKey(seeded(5));
+    // The survivor's oldest games fell out of the 100-game store; its score still counts them.
+    const g3 = endLog(buildLog(3, 0, null, ['e2e4', 'e7e5']), { result: '1-0', by: 'resign' });
+    const g4 = buildLog(4, 1, null, ['d2d4']);
+    const storage = seededStorage(0, key, [g3, g4]);
+    const st = createStore(storage);
+    const rec = st.rooms()[0];
+    st.saveRoom({ ...rec, score: [6, 2] });
+    const A = h.device('A', { storage });
+    await h.settle();
+    const B2 = h.device('B2');
+    await h.settle();
+    expect(A.ctrl.snapshot.requests.incoming).toBe('rejoin');
+    expect(A.ctrl.reply('rejoin', true)).toBe(true);
+    await h.settle();
+    expect(B2.ctrl.snapshot).toMatchObject({ live: true, seat: 1, n: 4 });
+    expect(A.ctrl.snapshot.score).toEqual([6, 2]);
+    expect(B2.ctrl.snapshot.score).toEqual([6, 2]);
+    expect(room(B2)?.score).toEqual([6, 2]);
+  });
+
+  it('a grant split over several messages restores the score without counting twice', async () => {
+    const h = createHarness({ code: CODE });
+    const key = generateKey(seeded(6));
+    // Games 1 and 2 were evicted on the survivor; games 3 and 4 are finished, game 5 is current.
+    const g3 = endLog(buildLog(3, 0, null, ['e2e4', 'e7e5']), { result: '1-0', by: 'resign' });
+    const g4 = endLog(buildLog(4, 1, null, ['d2d4']), { result: '0-1', by: 'resign' });
+    const g5 = buildLog(5, 0, null, ['c2c4']);
+    const storage = seededStorage(0, key, [g3, g4, g5]);
+    const st = createStore(storage);
+    st.saveRoom({ ...st.rooms()[0], score: [8, 2] });
+    // The survivor sends one game per message: game 5 goes in the grant, 3 and 4 follow in `logs`.
+    const A = h.device('A', { storage, maxMessageBytes: 150 });
+    await h.settle();
+    const B2 = h.device('B2');
+    await h.settle();
+    expect(A.ctrl.reply('rejoin', true)).toBe(true);
+    await h.settle();
+    const grant = h.sent().find((e) => e.msg.t === 'grant')?.msg as Extract<Message, { t: 'grant' }> | undefined;
+    expect(grant?.games.map((g) => g.n)).toEqual([5]);
+    expect(h.sent().filter((e) => e.msg.t === 'logs').length).toBeGreaterThan(0);
+    expect(B2.ctrl.snapshot).toMatchObject({ live: true, seat: 1, n: 5 });
+    expect(B2.ctrl.snapshot.logs.map((l) => l.n)).toEqual([3, 4, 5]);
+    expect(B2.ctrl.snapshot.score).toEqual([8, 2]);
+    expect(room(B2)?.score).toEqual([8, 2]);
+  });
 
   it('the survivor is offline when the other returns: the newcomer waits as anchor, recovery happens later', async () => {
     const { h, A, B } = await playedRoom();
@@ -1087,6 +1179,22 @@ describe('protocol version', () => {
 });
 
 describe('misc', () => {
+  it('the snapshot keeps the same logs array until a game changes (no needless history reloads)', async () => {
+    const { h, A, B } = await joined();
+    const first = A.ctrl.snapshot.logs;
+    expect(B.ctrl.ask('draw')).toBe(true);
+    await h.settle();
+    expect(A.ctrl.snapshot.requests.incoming).toBe('draw');
+    expect(A.ctrl.snapshot.logs).toBe(first);
+    expect(Object.isFrozen(first)).toBe(true);
+    A.ctrl.reply('draw', false);
+    await h.settle();
+    expect(A.ctrl.snapshot.logs).toBe(first);
+    expect(A.ctrl.move('e2e4')).toBe(true);
+    expect(A.ctrl.snapshot.logs).not.toBe(first);
+    expect(A.ctrl.snapshot.logs[0].plies.map((p) => p.m)).toEqual(['e2e4']);
+  });
+
   it('read-only (another tab): loads the room, never connects, board locked', async () => {
     const { h, A, B } = await joined();
     await play(h, [A, B], ['e2e4']);

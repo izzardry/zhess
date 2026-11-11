@@ -56,7 +56,13 @@ export default defineConfig(() => {
           // The Stockfish engine (~1.9 MB) is not precached; it is fetched on first use
           // and then served from the runtime cache below (DESIGN.md section 14).
           globIgnores: ["engine/**"],
-          // Network-first for navigation (HTML) so the app shell is always fresh when online.
+          // Network-first HTML (Ztyle 12, DESIGN 14). index.html stays in the precache so the app
+          // works offline from the first load, but navigations must not be answered from it:
+          // precacheAndRoute is registered before the runtime routes and would otherwise serve
+          // every navigation ("./", the only one under HashRouter) cache-first through its
+          // directory index. Without one, navigations reach the NetworkFirst route below, which
+          // falls back to the precached shell when the network and html-cache both fail.
+          directoryIndex: null,
           navigateFallback: undefined,
           runtimeCaching: [
             {
@@ -66,6 +72,7 @@ export default defineConfig(() => {
                 cacheName: "html-cache",
                 expiration: { maxEntries: 10 },
                 networkTimeoutSeconds: 3,
+                precacheFallback: { fallbackURL: "index.html" },
               },
             },
             {

@@ -297,6 +297,18 @@ describe('room helpers', () => {
     expect(() => bankRoomTurn(throwing, { code: 'A', n: 1, epoch: 0, len: 0, ms: 1, at: 0 })).not.toThrow();
     expect(takeBankedTurn('A', throwing, wall)).toBeNull();
   });
+
+  it('keeps the banked turns of several rooms side by side and drops stale ones', () => {
+    const s = memoryStorage();
+    const wall = () => 1_000_000_000;
+    bankRoomTurn(s, { code: 'OLD111', n: 1, epoch: 0, len: 3, ms: 900, at: 1_000_000_000 - 13 * 3600_000 });
+    bankRoomTurn(s, { code: 'AB12', n: 2, epoch: 1, len: 7, ms: 4000, at: 999_999_000 });
+    bankRoomTurn(s, { code: 'CD34', n: 1, epoch: 0, len: 4, ms: 2500, at: 999_999_500 });
+    expect(Object.keys(JSON.parse(s.getItem(ROOM_TURN_KEY)!)).sort()).toEqual(['AB12', 'CD34']);
+    expect(takeBankedTurn('CD34', s, wall)).toEqual({ n: 1, epoch: 0, len: 4, ms: 2500 });
+    expect(takeBankedTurn('AB12', s, wall)).toEqual({ n: 2, epoch: 1, len: 7, ms: 4000 });
+    expect(s.getItem(ROOM_TURN_KEY)).toBeNull();
+  });
 });
 
 /* ---------------------------------------------------------------------------------------------- */
@@ -817,8 +829,9 @@ describe('room session · turn banking', () => {
     expect(a.controller!.elapsed()).toBe(7000);
 
     win.dispatchEvent(new Event('pagehide'));
+    // One entry per room code (the bank lives in localStorage, shared by every room).
     const banked = JSON.parse(turnStorage.getItem(ROOM_TURN_KEY)!);
-    expect(banked).toMatchObject({ code: 'K7QW2M', n: 1, epoch: 0, len: 2, ms: 7000 });
+    expect(banked.K7QW2M).toMatchObject({ code: 'K7QW2M', n: 1, epoch: 0, len: 2, ms: 7000 });
 
     // Not this device's turn: nothing banked.
     turnStorage.removeItem(ROOM_TURN_KEY);
@@ -847,6 +860,35 @@ describe('room session · turn banking', () => {
     expect(owner.initialTurn).toMatchObject({ n: 1, epoch: 0, len: 2 });
     expect(owner.initialTurn!.ms).toBeGreaterThanOrEqual(7000);
     expect(turnStorage.getItem(ROOM_TURN_KEY)).toBeNull();
+  });
+
+  it('banks in localStorage by default, so closing the app keeps the turn time (DESIGN 9.8)', async () => {
+    localStorage.removeItem(ROOM_TURN_KEY);
+    sessionStorage.removeItem(ROOM_TURN_KEY);
+    const r = rig();
+    const storeA = r.newStore();
+    const a = r.session({ store: storeA, create: { tc: null, color: 'w' }, turnStorage: undefined });
+    r.session({ store: r.newStore() });
+    await r.settle();
+    expect(a.view.state?.live).toBe(true);
+    await r.advance(4000);
+    a.dispose();
+    await r.settle();
+    expect(sessionStorage.getItem(ROOM_TURN_KEY)).toBeNull();
+    expect(JSON.parse(localStorage.getItem(ROOM_TURN_KEY)!).K7QW2M).toMatchObject({ code: 'K7QW2M', n: 1, len: 0, ms: 4000 });
+    // The app opens again (a new tab session): the controller gets the banked turn.
+    const seen: RoomControllerOptions[] = [];
+    r.session({
+      store: storeA,
+      turnStorage: undefined,
+      createController: (o) => {
+        seen.push(o);
+        return createRoomController(o);
+      },
+    });
+    await r.settle();
+    expect(seen.find((o) => !o.readOnly)?.initialTurn).toEqual({ n: 1, epoch: 0, len: 0, ms: 4000 });
+    expect(localStorage.getItem(ROOM_TURN_KEY)).toBeNull();
   });
 
   it('does not bank when it is the opponent to move', async () => {

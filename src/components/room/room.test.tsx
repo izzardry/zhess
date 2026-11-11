@@ -303,6 +303,33 @@ describe('RequestToasts', () => {
     expect(onReply).toHaveBeenLastCalledWith('takeback', false);
   });
 
+  it('a request that replaces another in one render shows and stays (sonner keeps a dismissed id marked)', async () => {
+    const onReply = vi.fn();
+    const { rerender } = renderRoom(<RequestToasts requests={{ incoming: 'draw' }} onReply={onReply} />);
+    expect(await screen.findByRole('alertdialog', { name: 'Your opponent offers a draw' })).toBeInTheDocument();
+    // The draw offer lapses and a takeback request lands in the same render.
+    rerender(<RequestToasts requests={{ incoming: 'takeback' }} onReply={onReply} />);
+    expect(await screen.findByRole('alertdialog', { name: 'Your opponent asks for a takeback' })).toBeInTheDocument();
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 600));
+    });
+    const t = screen.getByRole('alertdialog', { name: 'Your opponent asks for a takeback' });
+    expect(screen.queryByRole('alertdialog', { name: 'Your opponent offers a draw' })).toBeNull();
+    await userEvent.click(within(t).getByRole('button', { name: 'Accept' }));
+    expect(onReply).toHaveBeenCalledWith('takeback', true);
+  });
+
+  it('the same request re-rendered stays one toast, updated in place', async () => {
+    const onReply = vi.fn();
+    const { rerender } = renderRoom(<RequestToasts requests={{ incoming: 'rejoin' }} onReply={onReply} />);
+    await screen.findByRole('alertdialog', { name: 'Opponent is rejoining from a new device' });
+    rerender(<RequestToasts requests={{ incoming: 'rejoin' }} onReply={() => onReply('again')} />);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 400));
+    });
+    expect(screen.getAllByRole('alertdialog')).toHaveLength(1);
+  });
+
   it('asks to Allow a rejoin from a new device', async () => {
     const onReply = vi.fn();
     renderRoom(<RequestToasts requests={{ incoming: 'rejoin' }} onReply={onReply} />);
@@ -389,6 +416,40 @@ describe('RoomToasts', () => {
     expect(await screen.findByText('Rematch declined')).toBeInTheDocument();
     src.emit('sync-error');
     expect(await screen.findByText('Could not sync this game with your opponent')).toBeInTheDocument();
+  });
+
+  it('a presence change right after the previous one timed out still shows', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
+    const src = noticeSource();
+    renderRoom(<RoomToasts onNotice={src.onNotice} onReply={() => {}} />);
+    src.emit('opponent-disconnected');
+    await act(async () => {
+      vi.advanceTimersByTime(100);
+    });
+    expect(screen.getByText('Opponent disconnected')).toBeInTheDocument();
+    // The toast times out; while it leaves, the opponent is back.
+    await act(async () => {
+      vi.advanceTimersByTime(4000);
+    });
+    src.emit('reconnected');
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(screen.getByText('Reconnected')).toBeInTheDocument();
+    expect(screen.queryByText('Opponent disconnected')).toBeNull();
+  });
+
+  it('another room announces its own failures again', async () => {
+    const src = noticeSource();
+    const props = { onNotice: src.onNotice, onReply: () => {}, onConnectManually: () => {} };
+    const { rerender } = renderRoom(<RoomToasts {...props} room="AAAA11" manualCause="broker-unreachable" />);
+    expect(await screen.findByText('Could not reach the connection service.')).toBeInTheDocument();
+    rerender(<RoomToasts {...props} room="AAAA11" manualCause="broker-unreachable" live />);
+    await waitFor(() => expect(screen.queryByText('Could not reach the connection service.')).toBeNull());
+    // The same tab opens another room whose broker is unreachable too.
+    rerender(<RoomToasts {...props} room="BBBB22" manualCause="broker-unreachable" />);
+    expect(await screen.findByText('Could not reach the connection service.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Connect manually' })).toBeInTheDocument();
   });
 
   it('runs the update check on a version mismatch and offers Reload', async () => {

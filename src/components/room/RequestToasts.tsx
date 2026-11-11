@@ -8,9 +8,11 @@
  *   9.7): the undo button (takeback), the flag (draw) and the overlay's Rematch. A toast here
  *   would sit on the toolbar at phone width for as long as the request is open.
  *
- * Toasts go through sonner (`toast.custom`) with a fixed id, so a request is shown once however
- * often the component renders. The Toaster frames every toast (Ztyle `.toast`, see
- * `components/ui/sonner.tsx`), so the custom content only lays out the text and the buttons.
+ * Toasts go through sonner (`toast.custom`) under one slot (`toastSlot.ts`): the same request is
+ * updated in place however often the component renders, and every new request gets a fresh id, so
+ * a request that replaces another in one render is not swallowed by sonner's exit of the old one.
+ * The Toaster frames every toast (Ztyle `.toast`, see `components/ui/sonner.tsx`), so the custom
+ * content only lays out the text and the buttons.
  * Renders nothing itself.
  */
 import { useEffect, useRef } from 'react';
@@ -18,8 +20,9 @@ import { toast } from 'sonner';
 import { useI18n } from '@/lib/i18n';
 import type { RequestKind } from '@/lib/types';
 import { requestKey } from './text';
+import { createToastSlot } from './toastSlot';
 
-/** Sonner id of the incoming request toast. */
+/** Prefix of the sonner ids of the incoming request toast (one fresh id per request). */
 export const INCOMING_TOAST_ID = 'room-request-in';
 
 export interface RequestToastsProps {
@@ -34,12 +37,30 @@ export function RequestToasts({ requests, onReply }: RequestToastsProps) {
   const replyRef = useRef(onReply);
   replyRef.current = onReply;
   const incoming = requests?.incoming;
+  const slot = useRef(createToastSlot(INCOMING_TOAST_ID)).current;
+  /** The request kind whose toast is on screen. */
+  const shownKind = useRef<RequestKind | 'rejoin' | null>(null);
+
+  // Unmount: the request toast goes with the room.
+  useEffect(() => () => slot.dismiss(), [slot]);
 
   useEffect(() => {
-    if (!incoming) return;
+    if (!incoming) {
+      slot.dismiss();
+      shownKind.current = null;
+      return;
+    }
     const kind = incoming;
+    // Another request replaces the one on screen: a new toast. The same one (e.g. a language
+    // switch) is updated in place.
+    if (shownKind.current !== kind) slot.dismiss();
+    shownKind.current = kind;
+    const id = slot.show();
     const answer = (ok: boolean) => {
-      toast.dismiss(INCOMING_TOAST_ID);
+      if (slot.id === id) {
+        slot.dismiss();
+        shownKind.current = null;
+      }
       replyRef.current(kind, ok);
     };
     toast.custom(
@@ -65,12 +86,9 @@ export function RequestToasts({ requests, onReply }: RequestToastsProps) {
           </div>
         </div>
       ),
-      { id: INCOMING_TOAST_ID, duration: Infinity, dismissible: false },
+      { id, duration: Infinity, dismissible: false },
     );
-    return () => {
-      toast.dismiss(INCOMING_TOAST_ID);
-    };
-  }, [incoming, t]);
+  }, [incoming, t, slot]);
 
   return null;
 }

@@ -35,6 +35,7 @@ import {
   applyTouch,
   applyUndo,
   canPlay,
+  isRunning,
   clampLevel,
   continueSpec,
   createSession,
@@ -457,6 +458,7 @@ export function useGameState(options: UseGameStateOptions = {}): UseGameState {
   roomStateRef.current = roomState;
 
   // The controller saves the room's games itself: tell the history and the Start pill.
+  // The controller keeps `logs` as the same array until a game changes, so this runs per change.
   const roomLogs = roomState?.logs;
   useEffect(() => {
     if (roomLogs) notifySavedGames();
@@ -467,7 +469,7 @@ export function useGameState(options: UseGameStateOptions = {}): UseGameState {
   const timerInit = useRef(false);
   if (!timerInit.current) {
     timerInit.current = true;
-    if (canPlay(state.session) && isVisible()) turn.current.since = now();
+    if (isRunning(state.session) && isVisible()) turn.current.since = now();
   }
 
   const turnElapsed = useCallback(() => {
@@ -481,7 +483,7 @@ export function useGameState(options: UseGameStateOptions = {}): UseGameState {
     const prev = ref.current;
     ref.current = next;
     const t = turn.current;
-    const running = canPlay(next.session) && isVisible();
+    const running = isRunning(next.session) && isVisible();
     const at = ctxRef.current.now();
     if (prev.session?.game !== next.session?.game || prev.session?.id !== next.session?.id) {
       t.used = 0;
@@ -519,7 +521,7 @@ export function useGameState(options: UseGameStateOptions = {}): UseGameState {
           t.used += at - t.since;
           t.since = null;
         }
-      } else if (t.since === null && canPlay(ref.current.session)) {
+      } else if (t.since === null && isRunning(ref.current.session)) {
         t.since = at;
       }
     };
@@ -818,9 +820,12 @@ export function useGameState(options: UseGameStateOptions = {}): UseGameState {
 
   const continueFromHere = useCallback(() => {
     const st = ref.current;
-    if (!st.session) return false;
+    // In a live room the shown game is the controller's (with this hook's review cursor). The new
+    // game is a solo game: room games are never forked into a room (DESIGN 12.3).
+    const shown = st.room ? roomSessionOf(st.room, roomStateRef.current) : st.session;
+    if (!shown) return false;
     const { store: s, rng: r, now: n } = ctxRef.current;
-    const spec = continueSpec(viewOf(st.session), st.lastSolo, freshCode(s.games(), r), st.tc);
+    const spec = continueSpec(viewOf(shown), st.lastSolo, freshCode(s.games(), r), st.tc);
     if (!spec) return false;
     const session = createSession(spec, n());
     commit({ ...st, code: session.code, room: null, session });

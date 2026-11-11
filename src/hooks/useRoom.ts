@@ -21,8 +21,10 @@
  *   when the broker is unreachable or switched off, or when ICE failed; after `fallbackMs` (10 s) of
  *   failing signalling otherwise. A device waiting peacefully as the anchor is not failing.
  * - **Persistence.** The controller saves the room and every game through the `Store` (3C). This
- *   session adds the running turn's time: it is banked in `sessionStorage` on `pagehide`, on a
+ *   session adds the running turn's time: it is banked in `localStorage` on `pagehide`, on a
  *   hidden tab and on dispose, and handed back to the controller as `initialTurn` (DESIGN 9.8).
+ *   `localStorage`, not `sessionStorage`: closing the app (a phone's normal way to leave) must not
+ *   lose it, or the reconnect would report a turn time of 0.
  * - **Snapshot.** `subscribe` / `view` follow the `useSyncExternalStore` contract: the view object
  *   changes only when something in it changed.
  *
@@ -141,7 +143,7 @@ export interface EventSourceLike {
   removeEventListener(type: string, cb: (e: Event) => void): void;
 }
 
-/** Storage for the banked turn (`sessionStorage`). */
+/** Storage for the banked turn (`localStorage`). */
 export type TurnStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
 export interface RoomSessionOptions {
@@ -172,7 +174,7 @@ export interface RoomSessionOptions {
   wallNow?: Now;
   rng?: Rng;
   timers?: Timers;
-  /** Where the running turn is banked. Default `sessionStorage`; null = no banking. */
+  /** Where the running turn is banked. Default `localStorage`; null = no banking. */
   turnStorage?: TurnStorage | null;
   /** `window` (pagehide, storage). Default the global one; null = none. */
   window?: EventSourceLike | null;
@@ -216,7 +218,7 @@ export function roomLockName(code: string): string {
   return `zhess:room:${code}`;
 }
 
-/** sessionStorage key of the banked running turn in a room. */
+/** localStorage key of the banked running turns, one entry per room code. */
 export const ROOM_TURN_KEY = 'zhess:room-turn';
 /** A bank older than this is ignored. */
 export const ROOM_TURN_MAX_AGE_MS = 12 * 60 * 60 * 1000;
@@ -256,41 +258,60 @@ function isBankEntry(v: unknown): v is BankEntry {
   );
 }
 
-/** Reads (and removes) the banked turn of `code`, if fresh. Never throws. */
-export function takeBankedTurn(code: string, storage: TurnStorage | null, wallNow: Now): InitialTurn | null {
-  if (!storage) return null;
+/** All banked turns by room code (an unreadable value counts as none). Never throws. */
+function readBank(storage: TurnStorage): Record<string, BankEntry> {
   let raw: string | null = null;
   try {
     raw = storage.getItem(ROOM_TURN_KEY);
   } catch {
-    return null;
+    return {};
   }
-  if (!raw) return null;
+  if (!raw) return {};
   let v: unknown;
   try {
     v = JSON.parse(raw);
   } catch {
-    return null;
+    return {};
   }
-  if (!isBankEntry(v) || v.code !== code) return null;
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
+  const out: Record<string, BankEntry> = {};
+  for (const [code, e] of Object.entries(v as Record<string, unknown>)) if (isBankEntry(e) && e.code === code) out[code] = e;
+  return out;
+}
+
+function writeBank(storage: TurnStorage, bank: Record<string, BankEntry>): void {
   try {
-    storage.removeItem(ROOM_TURN_KEY);
+    if (Object.keys(bank).length === 0) storage.removeItem(ROOM_TURN_KEY);
+    else storage.setItem(ROOM_TURN_KEY, JSON.stringify(bank));
   } catch {
     /* ignore */
   }
-  const age = wallNow() - v.at;
-  if (age < 0 || age > ROOM_TURN_MAX_AGE_MS || v.ms <= 0) return null;
+}
+
+const fresh = (e: BankEntry, now: number): boolean => {
+  const age = now - e.at;
+  return age >= 0 && age <= ROOM_TURN_MAX_AGE_MS;
+};
+
+/** Reads (and removes) the banked turn of `code`, if fresh. Never throws. */
+export function takeBankedTurn(code: string, storage: TurnStorage | null, wallNow: Now): InitialTurn | null {
+  if (!storage) return null;
+  const bank = readBank(storage);
+  const v = bank[code];
+  if (!v) return null;
+  delete bank[code];
+  writeBank(storage, bank);
+  if (!fresh(v, wallNow()) || v.ms <= 0) return null;
   return { n: v.n, epoch: v.epoch, len: v.len, ms: Math.round(v.ms) };
 }
 
-/** Writes the banked turn. Never throws. */
+/** Writes the banked turn of `entry.code`, keeping other rooms' fresh entries. Never throws. */
 export function bankRoomTurn(storage: TurnStorage | null, entry: BankEntry): void {
   if (!storage) return;
-  try {
-    storage.setItem(ROOM_TURN_KEY, JSON.stringify(entry));
-  } catch {
-    /* ignore */
-  }
+  const bank = readBank(storage);
+  for (const [code, e] of Object.entries(bank)) if (!fresh(e, entry.at)) delete bank[code];
+  bank[entry.code] = entry;
+  writeBank(storage, bank);
 }
 
 function defaultLocks(): LockManagerLike | null {
@@ -304,7 +325,7 @@ function defaultLocks(): LockManagerLike | null {
 
 function defaultTurnStorage(): TurnStorage | null {
   try {
-    return typeof sessionStorage !== 'undefined' ? sessionStorage : null;
+    return typeof localStorage !== 'undefined' ? localStorage : null;
   } catch {
     return null;
   }

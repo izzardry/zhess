@@ -3,7 +3,9 @@
  * the blurred board. Its label follows the context: START, RESUME or REVIEW (see `startLabel`).
  *
  * `loading` + `progress` show the engine download of milestone 2: a spinner and the percentage
- * inside the pill, which is then not pressable.
+ * inside the pill, with a tooltip of the progress. A tap while loading cancels the pending start
+ * and restores the idle pill (Ztyle 09 "Loading & long work"); the download goes on in the
+ * background, so a later Start picks it up.
  */
 import { Loader2 } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
@@ -13,8 +15,10 @@ import type { StartLabel } from './options';
 export interface StartPillProps {
   label: StartLabel;
   onClick: () => void;
-  /** Shows a spinner and blocks presses (engine loading). */
+  /** Shows a spinner; a press calls `onCancel` instead of `onClick` (engine loading). */
   loading?: boolean;
+  /** A press while loading: stop waiting and restore the idle pill. */
+  onCancel?: () => void;
   /** 0..1 while loading; shown as a percentage when given. */
   progress?: number;
   /** Blocks presses without a spinner (e.g. during the start transition). */
@@ -22,7 +26,7 @@ export interface StartPillProps {
   className?: string;
 }
 
-export function StartPill({ label, onClick, loading = false, progress, disabled = false, className }: StartPillProps) {
+export function StartPill({ label, onClick, loading = false, onCancel, progress, disabled = false, className }: StartPillProps) {
   const { t } = useI18n();
   const text = t(label);
   const percent =
@@ -30,13 +34,19 @@ export function StartPill({ label, onClick, loading = false, progress, disabled 
       ? Math.round(Math.min(1, Math.max(0, progress)) * 100)
       : null;
 
+  const tip = loading ? t('start.loadingTip', { percent: percent ?? 0 }) : undefined;
+
   return (
     <button
       type="button"
-      onClick={() => !loading && !disabled && onClick()}
+      onClick={() => {
+        if (disabled) return;
+        if (loading) onCancel?.();
+        else onClick();
+      }}
       disabled={disabled}
-      aria-disabled={loading || undefined}
       aria-busy={loading || undefined}
+      title={tip}
       data-testid="start-pill"
       data-label={label}
       className={cn('btn-primary font-mono', loading && 'cursor-wait', className)}

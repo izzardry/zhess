@@ -378,17 +378,27 @@ describe('StartPill', () => {
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 
-  it('shows a spinner and progress while loading and ignores presses', async () => {
+  // Ztyle 09 "Loading & long work": the spinner's tooltip shows the progress, and a click on it
+  // cancels and restores the previous state (it used to ignore presses).
+  it('shows a spinner, progress and a progress tooltip while loading; a press cancels instead of starting', async () => {
     const onClick = vi.fn();
-    wrap(<StartPill label="start" onClick={onClick} loading progress={0.426} />);
+    const onCancel = vi.fn();
+    wrap(<StartPill label="start" onClick={onClick} onCancel={onCancel} loading progress={0.426} />);
     const pill = screen.getByTestId('start-pill');
     expect(pill).toHaveAttribute('aria-busy', 'true');
+    expect(pill).toHaveAttribute('title', 'Loading the computer: 43%\nTap to cancel');
     const bar = screen.getByRole('progressbar');
     expect(bar).toHaveTextContent('43%');
     expect(bar).toHaveAttribute('aria-valuenow', '43');
     expect(bar).toHaveAccessibleName('Loading the computer, 43%');
     await userEvent.click(pill);
     expect(onClick).not.toHaveBeenCalled();
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('has no tooltip when idle', () => {
+    wrap(<StartPill label="start" onClick={() => {}} />);
+    expect(screen.getByTestId('start-pill')).not.toHaveAttribute('title');
   });
 
   it('loading without progress shows only the spinner', () => {
