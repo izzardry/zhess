@@ -508,7 +508,7 @@ The room is guarded with the Web Locks API (`zhess:room:<CODE>`). A second tab o
 
 - Stockfish compiled to WebAssembly, lite single-threaded build, run in a Web Worker and driven by UCI text over `postMessage`.
 - Single-threaded is required: GitHub Pages cannot send the COOP/COEP headers that `SharedArrayBuffer` needs.
-- About 7 MB. It is not part of the app shell. It is fetched on the first computer game, the first hint, or the first blunder check, and is then cached by the service worker with a `CacheFirst` rule. While it loads, the Start pill shows the Ztyle spinner with progress.
+- About 1.8 MB (stockfish.js 19.0.1, `lite-single`). It is not part of the app shell. It is fetched on the first computer game, the first hint, or the first blunder check, and is then cached by the service worker with a `CacheFirst` rule. While it loads, the Start pill shows the Ztyle spinner with progress.
 - `useZhessEngine` owns the worker: `bestMove(fen, level)`, `evaluate(fen, depth)`, `multiPv(fen, n, depth)`, `stop()`.
 
 ### 10.2 Levels
@@ -756,7 +756,7 @@ The Ztyle launch checklist is run after M3.
 4. **Offer size in a QR.** A compressed SDP offer must stay within a scannable QR. If it does not, the manual path falls back to links only.
 5. **Blunder guard latency.** A 150 ms budget at useful depth on a low-end phone is unproven. If it cannot be met, the guard runs only on levels where the engine is otherwise idle, or is cut down to mate-in-1 and hanging-piece detection without the engine.
 6. **Level feel.** The level table is a guess until played.
-7. **Engine size.** 7 MB on a mobile connection is noticeable; the progress indicator and one-time caching are the mitigation.
+7. **Engine size.** 1.8 MB is fetched on first use; the progress indicator and one-time caching are the mitigation.
 
 **Open questions**
 
