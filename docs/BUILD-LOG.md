@@ -4,7 +4,49 @@ The run's memory (PLAN.md section 1, rule 5). Updated after every package and ev
 
 ## Summary
 
-_(Written at the end of the run.)_
+The overnight run of 2026-11-11 is complete. All three milestones and the final audit passed their gates, and **nothing is switched off by flag**. `main` is pushed to izzardry/zhess.
+
+**What works, per milestone**
+- **Milestone 1 · Board (Gate 1 passed, round 1):** pass-and-play on one device. Tap, drag, keyboard and typed SAN input; promotion dial; face-to-face or side-by-side seating; helpers; undo/redo; review with step, flip and "continue from here"; resign with a 5 s undo; game-over overlay with tint; history (finished and unfinished, swipe to delete with undo); share by link and PGN; start screen with code, opponent stepper, color and clock pills; tutorial; four languages; installable offline PWA.
+- **Milestone 2 · Computer (Gate 2 passed, round 2):** Stockfish 19 lite (single-threaded WASM, loaded lazily from `public/engine`, runtime-cached, works offline after the first load). 12 levels, humanized 1–4. Clock with presets and a custom radial dial, Fischer increment, pause on Back or a hidden tab. Premove; two-tap hint and 1 s threat peek; blunder guard (refuse once, confirm within 5 s); draw offers to the computer; assisted marker. `node scripts/selfplay.mjs`: level 12 beats level 1.
+- **Milestone 3 · Rooms (Gate 3 passed, round 2):** serverless rooms for two. Start with ROOM creates or joins the code through the public PeerJS broker (STUN only), with a manual link/QR fallback. Covered: seat key with HMAC challenge and the "rejoin" Allow toast; reconcile by longest valid log with epochs; recovery when one device lost its storage; offline moves in untimed rooms; clocks paused while disconnected; takeback, draw and rematch requests with colour swap and score; presence; the same room in two tabs. e2e passes for the manual path, recovery, offline move and BroadcastChannel hand-over, **and the public-broker path was verified** in every gate run.
+- **Final phase (passed, round 1):** design audit (5 section groups in 3 agents), Ztyle launch-checklist audit, `/code-review high` and a visual pass at 5 sizes × light/dark. 31 confirmed findings were fixed, with tests. README rewritten.
+
+**Gate results:** Gate 0: 86 tests, e2e 5/5. Gate 1: 507 tests, e2e 23/23. Gate 2: 769 tests, e2e 32/32. Gate 3: 1410 tests, e2e 37/37. Final: lint and typecheck clean, 71 files / 1449 tests, build ok, e2e 38/38 (smoke 5, m1 18, m2 10, m3 5), nothing skipped. Details under "Gate results".
+
+**Failures along the way, stated plainly:** Gate 2 round 1 failed on three visual and timing bugs: the win/loss tint was hidden, the dial caption was clipped, and the duration left out the flagged turn. Gate 3 round 1 failed on three toast layout bugs. All were fixed in one round each. The machine crashed during the Gate 2 fix round; the workflow was resumed from its cache with no lost work.
+
+**Flagged off:** nothing.
+
+**Not verified (needs you):** two real phones on different networks (without TURN, some NAT pairs will not connect); the iOS installed-PWA path with the manual fallback, and Safari/Firefox in general (e2e is Chromium only); how levels 1–12 feel in play; blunder-guard latency on a low-end phone. The PeerJS broker path **was** verified (Chromium, one machine).
+
+**For you to decide or do:** enable GitHub Pages (the deploy workflow fails until then); set `og:image` to the deployed URL; review the 19 npm audit advisories; optionally split the 748 kB main chunk. PLAN.md and PROMPT.md stay uncommitted (excluded via .git/info/exclude), as asked.
+
+**Decisions and deviations:** every one is listed below under "Decisions" and "Deviations", grouped by phase. The most visible are:
+- Strict TypeScript.
+- The engine file runs directly as the Web Worker.
+- The clock dial has 9 values per ring (no 45 or 90 minutes).
+- A new `r` URL parameter carries a finished shared game's result.
+- The seat proof also signs the code and seat.
+- A device without a key always sends `join`.
+- The second tab can "Use here".
+- There is no outgoing-request toast; pending state shows on the button.
+- 44 px toolbar buttons always.
+- The Buy Me a Coffee button is drawn locally (no CDN).
+
+**Commands**
+```
+npm install
+npm run dev          # Vite dev server
+npm run build        # production build into dist/
+npm run preview      # serve dist/ (port 4173)
+npm run lint
+npm run typecheck
+npm test             # Vitest unit tests (71 files, 1449 tests)
+npm run e2e          # Playwright: smoke, m1, m2, m3 (builds and previews itself; rewrites docs/screenshots/m1)
+node scripts/selfplay.mjs                                   # level 12 vs level 1 with the real engine
+node scripts/screenshots.mjs http://localhost:4173/ <outdir> # 10 screens x 5 sizes x light/dark (needs a running preview)
+```
 
 ## Package checklist
 
@@ -43,13 +85,13 @@ _(Written at the end of the run.)_
 
 ### Final phase · Audit and polish
 
-- [ ] 1 · Design audit
-- [ ] 2 · Ztyle audit
-- [ ] 3 · Code review
-- [ ] 4 · Visual pass
-- [ ] 5 · Fix confirmed findings, re-run all e2e suites and the full gate
-- [ ] 6 · Docs
-- [ ] 7 · Commit and push
+- [x] 1 · Design audit
+- [x] 2 · Ztyle audit
+- [x] 3 · Code review
+- [x] 4 · Visual pass
+- [x] 5 · Fix confirmed findings, re-run all e2e suites and the full gate
+- [x] 6 · Docs
+- [x] 7 · Commit and push
 
 ## Decisions
 
@@ -142,6 +184,27 @@ _(One line each: where the design was silent, what was chosen and why.)_
 - Integrator 3: The e2e manual-path tests block the PeerJS WebSocket (`context.routeWebSocket`), so only STUN leaves the machine. No extra Chromium flags were needed: mDNS host candidates connect between two headless contexts.
 - Gate 3 fix: There is no outgoing request toast; the requester sees a pulsing pending state on the undo/flag/Rematch button (DESIGN 9.7). Request toasts have a single frame. The broker-failure toast is held back while the invite or manual sheet is open and for a manual guest, and shows afterwards only if still owed.
 
+**Final phase**
+- Audit: three design auditors (DESIGN 4–8, 9, 10–14), the Ztyle launch checklist and a visual pass found 27 items; a skeptic confirmed 23 and rejected 4 (duplicates, or not stated by the design). `/code-review high` found 8 more. All 31 were fixed; none was flagged off.
+- Rooms: a clash of two provisional rooms (both devices started the code while apart) is settled by the room, not the transport role: the older room wins, then the one with more plies, then the anchor. A locked room always beats a provisional one. `hello` carries open/born/len for this.
+- Rooms: a rejoin grant no longer double-counts the score. The running room turn is banked in localStorage `zhess:room-turn` (one entry per code, pruned after 12 h), so it survives closing the app.
+- Rooms: in a finished room game the toolbar's flag slot becomes Rematch, which reopens the overlay and pulses while a rematch request waits. The overlay's Rematch is disabled with "Waiting for opponent" when it cannot be asked.
+- Rooms: toasts get a fresh sonner id per showing (`components/room/toastSlot.ts`), because sonner 1.7.4 deletes a toast re-created under a just-dismissed id. Remembered failure causes reset when the room changes.
+- History: undoing the deletion of any game of a room brings the room record back (deleting a room game still removes the local room record, per DESIGN 9.5).
+- "Continue from here" also works from a room game's review and starts a solo game. A solo clock and the computer keep running while the player looks back through a live game.
+- The Start pill cancels when tapped while the engine loads, and shows the load percent in a tooltip (Ztyle 09).
+- Service worker: page loads are network-first (`html-cache`) with the precached index.html as offline fallback (workbox `directoryIndex: null`).
+- Toolbar buttons are always 44 px (DESIGN 14.1); in portrait only the spacing shrinks. The mobile-landscape rail becomes a two-column grid on short screens.
+- Toasts sit at the bottom right, above the toolbar and the bottom safe area; in mobile landscape they fit between the board and the right edge.
+- Below 360 px the info pill uses two rows, so the opponent cell (level, players, room score) is kept.
+- Under reduced motion the hint and blunder marks are drawn statically for 1.6 s; the hinted square gets a visible focus ring.
+- The start screen draws the blurred preview board smaller (`previewFit`) so the chrome never overlaps it; it scales back to full size on Start.
+- The clock dial's caption goes above the ring when the dial was pushed up (landscape). Help's 3 s hold is announced: "Show help (hold for a surprise)".
+- History cards never truncate the code; game number and room score move to the opponent line. Game-over summary parts wrap whole.
+- A device waiting as anchor without a seat shows "Waiting for opponent" after 1 s.
+- `scripts/screenshots.mjs` captures 10 screens × 5 sizes × light/dark; the final set is in docs/screenshots/final/ (100 images).
+- README rewritten in Zudoku's shape (features, stack, getting started, scripts, structure, how rooms work, licence and engine credit).
+
 ## Deviations
 
 _(Where a design decision could not be built as stated: what was built instead, and why.)_
@@ -163,27 +226,36 @@ _(Where a design decision could not be built as stated: what was built instead, 
 - 3D: The second tab gets a "Use here" take-over action beyond DESIGN 9.12's read-only message.
 - Integrator 3: Removed `invite`/`consumeInvite` from useGameState; invite links open the room directly. Edited 3B's manual.test.ts (test only) to fix a timing flake under full-suite load. `StripClock` gains `note`; `UseSavedGames` gains `rooms`.
 - Gate 3 fix: Changed the unit test that asserted an outgoing request toast, because DESIGN 9.7 asks for a pending state on the button instead; gave one long Index.room integration test an explicit 15 s timeout (no assertion loosened).
+- Final phase: the protocol `hello` carries open/born/len (local `HelloOut` type in room/controller.ts, like `EndOut`).
+- Final phase, tests changed to match DESIGN/Ztyle (never loosened): the StartPill test now expects a press while loading to cancel (Ztyle 09). The toolbar test expects 44 px buttons instead of shrinking ones (DESIGN 14.1). The Help label includes its hold (DESIGN 6.4). The room-turn bank test reads the new per-code format, and the room history-card regex follows the new card layout.
 
 ## Open items
 
 _(Features switched off in `src/lib/flags.ts`, tests marked `fixme`, and anything left for the owner.)_
 
-- The GitHub Pages deploy workflow will fail on each push to `main` until the owner enables Pages (the run must not enable it).
+Nothing is switched off: every flag in `src/lib/flags.ts` is on, and no test is marked `fixme` or skipped. The broker test can skip itself only when 0.peerjs.com is unreachable, and it did not.
+
+For the owner:
+- The GitHub Pages deploy workflow (`.github/workflows/deploy.yml`) fails on each push to `main` until Pages is enabled (the run must not enable it).
+- `og:image` / `twitter:image` are root-absolute (`/og-image.png`); set them to the deployed URL once it exists.
 - `npm install` reported 19 audit advisories (2 low, 14 moderate, 1 high, 2 critical) in dev/build dependencies; not addressed.
-- M1 visual notes for the final visual pass: start-screen chrome overlaps the blurred preview board at 1280×800 and in mobile landscape; Tailwind drops `duration-[400ms]` (TutorialOverlay) and `duration-[250ms]` (ResignUndoToast) as ambiguous; phone version stamp is centered, not bottom right; game-over summary line wraps awkwardly at 390 px; far clock in the landscape rail is not rotated face-to-face.
-- `og:image` / `twitter:image` are root-absolute (`/og-image.png`) until a deployed URL exists.
-- Build warns that one JS chunk is 561 kB (> 500 kB).
-- Level feel (DESIGN 17 risk 6) and blunder-guard latency on low-end phones (risk 5) are not play-tested; in Node the guard's depth-8 check takes 6–11 ms cold, ~1 ms warm.
-- Minor duplication left: DEFAULT_LEVEL in lib/levels.ts, lib/gameRecord.ts and components/start/options.ts; useComputer's toTc vs lib/clock.ts toTimeControl; useGameState's own Date.now turn timer is now unused by the page.
-- On phones the sonner toast covers the toolbar for its ~4 s lifetime (inherited Zudoku placement); for the final visual pass.
-- The custom clock dial floats over the opponent selector and its caption half-covers the clock pill's label while open (cosmetic; for the final visual pass).
-- Rooms: if both players end the same game while disconnected (for example both resign offline), the two finished copies count as a fork and seat 0's copy wins with a restore toast on both devices. A test pins this behaviour.
-- Rooms: `head` summarizes only the current game, so differences in older finished games are repaired only when they travel in a `logs` message (normally before a rematch).
+- Build warns that the main JS chunk is 748 kB (> 500 kB). peerjs is already split out; the engine is not bundled.
+
+Known limits, by design or accepted:
+- Rooms: if both players end the same game while disconnected (for example both resign offline), the two finished copies count as a fork and seat 0's copy wins, with a restore toast on both devices. A test pins this.
+- Rooms: `head` covers only the current game, so differences in older finished games are repaired only when they travel in a `logs` message.
 - Rooms: no channel binding. A stranger relaying between two online players who both dial the stranger's anchor id could read moves (not the key); out of scope under DESIGN 9.3's threat model.
-- Rooms: if the 100-game store cap evicts old room games, the room score is updated incrementally instead of being recomputed.
+- Rooms: two provisional rooms created within the devices' clock skew of each other are ordered by plies, then by anchor.
+- Rooms: if the 100-game store cap evicts old room games, the score is updated incrementally instead of being recomputed.
 - DESIGN 4.1: a joiner's color pill is not dimmed, because the start screen cannot tell a joiner from a creator before connecting.
-- Rooms: a manually connected room falling back to the broker is covered by unit tests only, not e2e. Firefox and WebKit are not run in e2e (Chromium only); Firefox SDP rebuild is untested.
-- Minor M3 visual notes: presence toasts cover the toolbar for ~4 s on phones; the guest's manual sheet auto-focuses its close button; the hovered sonner stack can rise over the board's bottom rank on desktop.
+- Minor duplication: DEFAULT_LEVEL in three places; useComputer's toTc vs clock.ts toTimeControl; useGameState's own Date.now turn timer is unused by the page.
+- Cosmetic: the clock dial opens over the opponent selector; at 320×568 and 844×390 the invite sheet scrolls and Copy link starts below the fold; a toast at 320×568 covers the near clock for its lifetime; the version stamp is bottom-centre on phones, and the back-to-top button can cover the last credit line (both inherited from Zudoku); the guest's manual sheet focuses its close button; at 2560×1440 the board stops at the 76 px cell cap.
+
+Not verified (needs a person):
+- Two real phones on different networks (mobile data vs Wi-Fi, NAT types). Without TURN, some symmetric-NAT pairs will not connect; the manual fallback uses the same STUN-only ICE.
+- The iOS installed-PWA (home-screen) path with the manual link/QR fallback, and Safari/Firefox in general: e2e runs Chromium only, and the Firefox SDP rebuild is untested.
+- Level feel for levels 1–12 (DESIGN 17 risk 6) and blunder-guard latency on low-end phones (risk 5; in Node the depth-8 check takes 6–11 ms cold, ~1 ms warm).
+- A manually connected room falling back to the broker when the channel drops is covered by unit tests only.
 
 ## Gate results
 
@@ -196,3 +268,5 @@ _(Per gate: commands run, pass/fail counts, what was disabled.)_
 **Gate 2** (2026-11-11, passed in round 2 of up to 4). Round 1 failed on three findings: the win/loss page tint was hidden behind the body background, the clock-dial caption was clipped at 390×844, and the game-over duration left out the turn on which the flag fell. The machine crashed during fix round 1; the workflow was resumed from its cache. Fix 514984b. Round 2: `lint` 0 problems · `typecheck` clean · `test` 58 files / 769 tests passed (the real-engine suites ran, not skipped) · `build` ok (25 precache entries; engine runtime-cached by CacheFirst `engine-cache`, not precached) · `e2e` 32/32 (smoke 5, m1 14, m2 9; no skips or retries) · `node scripts/selfplay.mjs` level 12 beat level 1. Screenshots in docs/screenshots/m2/ (`r2-*` are after the fix). Passed, nothing disabled.
 
 **Gate 3** (2026-11-11, passed in round 2 of up to 4). Round 1: all commands passed, `e2e` 37/37, but three layout faults failed it: the never-expiring broker-failure toast covered the invite and manual sheets; request toasts had a double frame; the outgoing pending toast covered the toolbar. Fix 9b2c717. Round 2: `lint` 0 problems · `typecheck` clean · `test` 69 files / 1410 tests passed · `build` ok (only the >500 kB chunk warning) · `e2e` 37/37 with 0 skipped, 0 flaky: smoke 5, m1 18, m2 9, m3 5. The m3 tests are the manual path, recovery, offline move, the BroadcastChannel hand-over (same context, two pages) and the broker path. **Broker path: verified.** Both contexts connected through the public 0.peerjs.com broker (`data-room-via=broker`) and played moves across, in both rounds. 30 screenshots in docs/screenshots/m3/. Passed, nothing disabled.
+
+**Final gate** (2026-11-11, passed in round 1 of up to 4, at b255d9d): `lint` 0 problems · `typecheck` clean · `test` 71 files / 1449 tests passed, 0 skipped (the real-engine suites ran) · `build` ok (26 precache entries; only the chunk-size warning remains after c5abb45 removed a Tailwind warning caused by a test comment) · `e2e` 38/38, 0 skipped, 0 flaky, 0 retries: smoke 5, m1 18, m2 10, m3 5 · broker path verified (2.5 s through 0.peerjs.com) · `node scripts/selfplay.mjs`: level 12 mated level 1 in 47 plies, +20 material · test-diff check since 35ff61b: nothing skipped or loosened. 100 screenshots in docs/screenshots/final/ checked at 320×568, 390×844, 844×390, 1280×800 and 2560×1440 in light and dark; no layout faults. Nothing disabled.
