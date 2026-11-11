@@ -30,7 +30,7 @@ _(Written at the end of the run.)_
 - [x] 2B · Clock
 - [x] 2C · Assistance
 - [x] Integrator 2
-- [ ] Gate 2
+- [x] Gate 2
 
 ### Milestone 3 · Rooms
 
@@ -119,6 +119,7 @@ _(One line each: where the design was silent, what was chosen and why.)_
 - Integrator 2: Start/Resume of a computer game waits on the Start pill (spinner with progress); a history card does not wait. Engine failure shows one calm toast (fixed id) with Try again.
 - Integrator 2: Hint bulb disabled while the computer is to move. Donation prompt fires 1.5 s after the win overlay appears. A tap on the stage with a premove queued only cancels the premove.
 - Integrator 2: No visible "computer thinking" indicator (the design names none); exposed as `data-computer` on the stage for tests.
+- Gate 2 fix: The win/loss tint stays a `-z-10` fixed layer; the stage root became a stacking context (`isolate`) so the body background no longer hides it. The clock dial clamp moved to `components/start/dialPlacement.ts` and reserves the caption, a popped item and the bottom safe area. The game-over duration adds the flagged side's remaining time for games lost on time (derived from the log and time control; no new stored field).
 
 ## Deviations
 
@@ -147,6 +148,7 @@ _(Features switched off in `src/lib/flags.ts`, tests marked `fixme`, and anythin
 - Level feel (DESIGN 17 risk 6) and blunder-guard latency on low-end phones (risk 5) are not play-tested; in Node the guard's depth-8 check takes 6–11 ms cold, ~1 ms warm.
 - Minor duplication left: DEFAULT_LEVEL in lib/levels.ts, lib/gameRecord.ts and components/start/options.ts; useComputer's toTc vs lib/clock.ts toTimeControl; useGameState's own Date.now turn timer is now unused by the page.
 - On phones the sonner toast covers the toolbar for its ~4 s lifetime (inherited Zudoku placement); for the final visual pass.
+- The custom clock dial floats over the opponent selector and its caption half-covers the clock pill's label while open (cosmetic; for the final visual pass).
 
 ## Gate results
 
@@ -155,3 +157,5 @@ _(Per gate: commands run, pass/fail counts, what was disabled.)_
 **Gate 0** (2026-11-11 01:12): `lint` 0 problems · `typecheck` clean · `test` 7 files / 86 tests passed · `build` ok (engine not precached) · `e2e` 5/5 passed · `public/engine/` holds the engine js, wasm, Copying.txt, README. Passed, nothing disabled.
 
 **Gate 1** (2026-11-11, round 1 of up to 4): `lint` 0 problems · `typecheck` clean · `test` 39 files / 507 tests passed · `build` ok (25 precache entries; 561 kB chunk warning) · `e2e` 23/23 passed (m1 × 2 viewports, screenshots, smoke). Verifier confirmed every Gate 1 scenario is implemented at both viewports with no skips and checked all 16 screenshots. Passed, nothing disabled.
+
+**Gate 2** (2026-11-11, passed in round 2 of up to 4). Round 1 failed on three findings: the win/loss page tint was hidden behind the body background, the clock-dial caption was clipped at 390×844, and the game-over duration left out the turn on which the flag fell. The machine crashed during fix round 1; the workflow was resumed from its cache. Fix 514984b. Round 2: `lint` 0 problems · `typecheck` clean · `test` 58 files / 769 tests passed (the real-engine suites ran, not skipped) · `build` ok (25 precache entries; engine runtime-cached by CacheFirst `engine-cache`, not precached) · `e2e` 32/32 (smoke 5, m1 14, m2 9; no skips or retries) · `node scripts/selfplay.mjs` level 12 beat level 1. Screenshots in docs/screenshots/m2/ (`r2-*` are after the fix). Passed, nothing disabled.
