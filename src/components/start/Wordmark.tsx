@@ -50,6 +50,7 @@ export function StartHeader({ visible, landscape = false, children, className }:
     <header
       ref={ref}
       data-testid="start-header"
+      data-start-edge="top"
       data-visible={visible}
       className={cn(
         'pointer-events-none fixed inset-x-0 z-20 flex flex-col items-center px-4',

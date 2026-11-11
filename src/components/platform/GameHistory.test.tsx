@@ -123,6 +123,17 @@ describe('GameHistory', () => {
     expect(card).toHaveTextContent('2 – 1');
     expect(card).toHaveTextContent('Room');
     expect(card).toHaveTextContent('Won');
+    // The code keeps its full width; the game number and score sit on the opponent line, not
+    // between the code and the time (they squeezed the code to `R…` and overlapped the time).
+    const code = card.querySelector('[data-part="code"]')!;
+    expect(code).toHaveTextContent('ROOM1');
+    expect(code.className).toContain('shrink-0');
+    expect(code.className).not.toContain('truncate');
+    const codeRow = code.parentElement!;
+    expect(codeRow.querySelector('[data-part="time"]')).not.toBeNull();
+    expect(codeRow.querySelector('[data-part="game-number"]')).toBeNull();
+    expect(codeRow.querySelector('[data-part="room-score"]')).toBeNull();
+    expect(card.querySelector('[data-part="room-score"]')).toHaveTextContent('2 – 1');
   });
 
   it('shows pass-and-play opponent and results', () => {

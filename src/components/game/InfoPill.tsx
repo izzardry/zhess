@@ -40,8 +40,12 @@ export interface InfoPillProps {
   className?: string;
 }
 
+/** Every cell has the same structure and height, so eyebrows and values line up (Ztyle 10). */
+const CELL = 'flex flex-col items-center';
 const EYEBROW = 'text-[10px] leading-4 uppercase tracking-wider text-muted-foreground';
-const VALUE = 'font-mono text-sm tracking-widest whitespace-nowrap';
+const VALUE = 'flex h-5 items-center justify-center font-mono text-sm leading-5 tracking-widest whitespace-nowrap';
+// Below 360 px (portrait) the pill takes two rows: code and opponent, then the move strip. The
+// `max-[359px]:` classes are written out in full so Tailwind's scanner finds them.
 
 /**
  * Info pill (DESIGN 4.2, Ztyle 10 stats pill): game code (+ presence), opponent, move strip.
@@ -79,7 +83,16 @@ export function InfoPill({
         ? [t('game.eyebrow.players'), '2']
         : [t('game.eyebrow.score'), `${formatPoints(opponent.score[0])} – ${formatPoints(opponent.score[1])}`];
 
-  const divider = <div aria-hidden="true" className={landscape ? 'w-8 h-px bg-border' : 'h-6 w-px bg-border'} />;
+  const divider = <div aria-hidden="true" className={landscape ? 'w-8 h-px bg-border' : 'h-6 w-px bg-border self-center justify-self-center'} />;
+  // The divider before the move strip: in the narrow two-row pill a line across the pill.
+  const rowDivider = landscape ? (
+    divider
+  ) : (
+    <div
+      aria-hidden="true"
+      className="h-6 w-px bg-border max-[359px]:col-span-3 max-[359px]:h-px max-[359px]:w-auto max-[359px]:mx-1"
+    />
+  );
 
   const strip = pair ? (
     <span className="inline-flex items-baseline gap-1.5">
@@ -109,29 +122,30 @@ export function InfoPill({
       aria-label={t('game.info')}
       className={cn(
         'pointer-events-auto bg-card/80 backdrop-blur-sm border border-border shadow-lg rounded-2xl text-center',
-        // Narrow phones: tighter gaps so the pill fits between Back and Help (Ztyle 05 top row).
+        // Narrow phones: tighter gaps so the pill fits between Back and Help (Ztyle 05 top row);
+        // below 360 px a two-row grid keeps all three cells (DESIGN 4.2).
         landscape
           ? 'inline-flex flex-col items-center gap-3 px-3 py-4'
-          : 'inline-flex items-center gap-2 min-[400px]:gap-3 sm:gap-4 px-2.5 min-[400px]:px-3 sm:px-4 py-2',
+          : cn(
+              'inline-flex items-center gap-2 min-[400px]:gap-3 sm:gap-4 px-2.5 min-[400px]:px-3 sm:px-4 py-2',
+              'max-[359px]:inline-grid max-[359px]:grid-cols-[auto_auto_auto] max-[359px]:gap-x-2 max-[359px]:gap-y-0.5 max-[359px]:py-1',
+            ),
         placement === 'inline' && className,
       )}
     >
-      <div data-cell="code">
+      <div data-cell="code" className={CELL}>
         <div className={EYEBROW}>{t('game.eyebrow.game')}</div>
-        <div className={cn(VALUE, 'inline-flex items-center gap-1.5')}>
+        <div className={cn(VALUE, 'gap-1.5')}>
           <span>{code}</span>
           {presence}
         </div>
       </div>
-      {/* Below 360 px the opponent cell gives way so the pill clears Back and Help. */}
-      <div className={cn('contents', !landscape && 'max-[359px]:hidden')}>
-        {divider}
-        <div data-cell="opponent">
-          <div className={EYEBROW}>{eyebrow}</div>
-          <div className={VALUE}>{value}</div>
-        </div>
-      </div>
       {divider}
+      <div data-cell="opponent" className={CELL}>
+        <div className={EYEBROW}>{eyebrow}</div>
+        <div className={VALUE}>{value}</div>
+      </div>
+      {rowDivider}
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <button
@@ -140,7 +154,12 @@ export function InfoPill({
             aria-label={t('game.showMoves')}
             aria-describedby={stripId}
             disabled={moves.length === 0}
-            className="rounded-lg px-1 -mx-1 hover:bg-foreground/5 transition-colors duration-fast disabled:cursor-default disabled:hover:bg-transparent"
+            className={cn(
+              CELL,
+              'rounded-lg px-1 -mx-1 hover:bg-foreground/5 active:scale-95 transition-[background-color,transform] duration-fast',
+              'disabled:cursor-default disabled:hover:bg-transparent disabled:active:scale-100',
+              !landscape && 'max-[359px]:col-span-3 max-[359px]:mx-auto',
+            )}
           >
             <div className={EYEBROW}>{t('game.eyebrow.move')}</div>
             <div id={stripId} className={cn(VALUE, 'tracking-wide')}>

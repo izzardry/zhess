@@ -5,6 +5,7 @@ export default defineTable({
   en: {
     // History (DESIGN 12.2)
     'platform.history.title': 'Previous games',
+    'platform.notifications': 'Notifications',
     'platform.history.allGames': 'All games',
     'platform.history.moreGames': '{count} more games',
     'platform.history.oneMoreGame': '1 more game',
@@ -66,6 +67,7 @@ export default defineTable({
   },
   de: {
     'platform.history.title': 'Vorherige Spiele',
+    'platform.notifications': 'Benachrichtigungen',
     'platform.history.allGames': 'Alle Spiele',
     'platform.history.moreGames': '{count} weitere Spiele',
     'platform.history.oneMoreGame': '1 weiteres Spiel',
@@ -122,6 +124,7 @@ export default defineTable({
   },
   fr: {
     'platform.history.title': 'Parties précédentes',
+    'platform.notifications': 'Notifications',
     'platform.history.allGames': 'Toutes les parties',
     'platform.history.moreGames': '{count} parties de plus',
     'platform.history.oneMoreGame': '1 partie de plus',
@@ -178,6 +181,7 @@ export default defineTable({
   },
   es: {
     'platform.history.title': 'Partidas anteriores',
+    'platform.notifications': 'Notificaciones',
     'platform.history.allGames': 'Todas las partidas',
     'platform.history.moreGames': '{count} partidas más',
     'platform.history.oneMoreGame': '1 partida más',

@@ -6,3 +6,12 @@
 @tailwind utilities;
 
 /* Zhess-specific styles go below. Keep them in @layer components so utilities still win. */
+
+/*
+ * Toasts in mobile landscape (components/ui/sonner.tsx): bottom right beside the board, also on
+ * phones of 600 px or less, where sonner would otherwise stretch them across the screen.
+ */
+@media (max-width: 600px) {
+  [data-sonner-toaster].zhess-toaster-rail { left: auto; width: var(--width); }
+  [data-sonner-toaster].zhess-toaster-rail [data-sonner-toast] { width: var(--width); }
+}

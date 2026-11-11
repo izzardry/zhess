@@ -249,6 +249,27 @@ test.describe('milestone 2 · computer', () => {
     expect(legal).toContain(`${first}${second}`);
   });
 
+  test('hint with reduced motion: a static fill and a visible focus ring instead of the pulse', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await startComputer(page, { color: 'w' });
+    const hint = toolbar(page).getByRole('button', { name: /^Hint/ });
+    const hinted = page.locator('[data-state~="hint"]');
+    await hint.click();
+    await expect(hinted).toHaveCount(1, { timeout: 10_000 });
+    const square = (await hinted.getAttribute('data-square'))!;
+    const mark = hinted.locator('[data-marker="hint"]');
+    // Well after the 1 ms the global reduced-motion block leaves the pulse: the fill is still there.
+    await page.waitForTimeout(400);
+    expect(await mark.evaluate((el) => getComputedStyle(el).opacity)).toBe('1');
+    // A visible success fill (alpha 0.3), not the pulse's transparent end state.
+    expect(await mark.evaluate((el) => getComputedStyle(el).boxShadow)).toMatch(/, 0\.3\) .*inset/);
+    // The hinted square has focus, shown as a ring although the bulb was clicked with a pointer.
+    expect(await page.evaluate(() => document.activeElement?.getAttribute('data-square'))).toBe(square);
+    expect(await cell(page, square).evaluate((el) => el.matches(':focus-visible'))).toBe(true);
+    // It clears after twice the pulse's duration.
+    await expect.poll(() => mark.evaluate((el) => Number(getComputedStyle(el).opacity)), { timeout: 5_000 }).toBeLessThan(0.01);
+  });
+
   test('blunder guard: hanging the queen is refused once and accepted the second time', async ({ page }) => {
     // 1. e4 e5 2. Qh5 Nc6: Qh6?? hangs the queen to gxh6.
     const plies = ['e2e4', 'e7e5', 'd1h5', 'b8c6'].map((m) => ({ m, ms: 0 }));

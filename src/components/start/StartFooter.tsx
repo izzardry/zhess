@@ -30,6 +30,7 @@ export function StartFooter({ visible, landscape = false, selector, pills, extra
     <div
       ref={ref}
       data-testid="start-footer"
+      data-start-edge="bottom"
       data-visible={visible}
       className={cn(
         'fixed inset-x-0 z-20 flex px-4 transition-all duration-500 ease-out',

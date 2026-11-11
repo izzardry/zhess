@@ -219,7 +219,7 @@ export function TutorialOverlay({ onDismiss, mode = 'computer', isLandscape, isT
       tabIndex={-1}
       data-testid="tutorial-overlay"
       className={cn(
-        'fixed inset-0 z-[100] outline-none select-none cursor-pointer transition-opacity duration-[400ms]',
+        'fixed inset-0 z-[100] outline-none select-none cursor-pointer transition-opacity [transition-duration:400ms]',
         exiting ? 'opacity-0' : 'opacity-100',
       )}
       onClick={dismiss}

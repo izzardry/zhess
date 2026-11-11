@@ -17,7 +17,7 @@
  *
  * Presentational: the parent decides what each callback does (e.g. how far undo goes).
  */
-import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
 import {
   ArrowLeft,
   Flag,
@@ -40,6 +40,7 @@ import { cn } from '@/lib/utils';
 import { SeatingButton } from './SeatingButton';
 import { ShareMenu } from './ShareMenu';
 import { ToolbarButton } from './ToolbarButton';
+import { TARGET, railVars, toolbarLayout } from './toolbarLayout';
 
 /** Toolbar mode: a play mode, or review of a finished game. */
 export type ToolbarMode = Mode | 'review';
@@ -112,14 +113,30 @@ export interface StatusBarProps {
   onCopyPgn?: () => void;
 }
 
-/** Top of the landscape rail: below Help (top 1.5rem, 44 px on touch) with a small gap. */
-const RAIL_TOP = 'calc(max(1.5rem, env(safe-area-inset-top)) + 2.75rem + 0.5rem)';
 
 /** A request waits for the opponent (DESIGN 9.7): the icon pulses, like the waiting presence dot. */
 const PENDING = 'animate-pulse motion-reduce:animate-none';
 
 /** Floating chrome surface (Ztyle 06). */
 const GLASS = 'bg-card/80 backdrop-blur-sm border border-border shadow-lg';
+
+/** `matchMedia(query).matches`, following changes; false without `matchMedia`. */
+function useMediaQuery(query: string): boolean {
+  const subscribe = useCallback(
+    (cb: () => void) => {
+      const mq = typeof window !== 'undefined' ? window.matchMedia?.(query) : undefined;
+      if (!mq) return () => {};
+      mq.addEventListener?.('change', cb);
+      return () => mq.removeEventListener?.('change', cb);
+    },
+    [query],
+  );
+  return useSyncExternalStore(
+    subscribe,
+    () => (typeof window !== 'undefined' && !!window.matchMedia?.(query).matches),
+    () => false,
+  );
+}
 
 export function StatusBar(props: StatusBarProps) {
   const {
@@ -161,6 +178,8 @@ export function StatusBar(props: StatusBarProps) {
     if (barRef.current) barRef.current.inert = !visible;
   }, [visible]);
 
+  // Each long press is announced in the aria-label (DESIGN 6.4, Ztyle 08).
+  const helpLabel = onHelpHold ? t('game.showHelpHold') : t('game.showHelp');
   const help = useLongPress({
     ms: HOLD_MS.help,
     onLongPress: () => onHelpHold?.(),
@@ -306,25 +325,38 @@ export function StatusBar(props: StatusBarProps) {
   }
 
   const groups = [history, assist, out].filter((g) => g.length > 0);
-  const count = groups.reduce((n, g) => n + g.length, 0);
-  const dividers = groups.length - 1;
+  const layout = toolbarLayout(groups.map((g) => g.length), landscape);
+  const railTall = useMediaQuery(layout.singleColumnQuery);
+  const grid = landscape && layout.cols === 2 && !railTall;
 
-  // Button size: 44 px where it fits (DESIGN 14.1), shrinking on narrow screens so the bar never
-  // overflows. Overhead = bar padding and border, dividers, gaps (plus side insets in portrait).
-  // Landscape: the rail starts below the top-right Help button (RAIL_TOP) and is centered when the
-  // screen is tall enough, so it never runs under Help on a short phone in landscape.
-  const railOverhead = 32 + 2 + dividers * 9 + (count - 1) * 2;
-  const overhead = landscape ? railOverhead : 32 + 16 + 2 + dividers * 9 + (count - 1) * 2;
-  const size = landscape
-    ? `clamp(30px, calc((100dvh - ${RAIL_TOP} - 1rem - env(safe-area-inset-bottom) - ${overhead}px) / ${count}), 44px)`
-    : `clamp(34px, calc((100vw - ${overhead}px) / ${count}), 44px)`;
-  const railStyle: CSSProperties | undefined = landscape
-    ? { top: `max(${RAIL_TOP}, calc(50% - (${count} * var(--tb) + ${railOverhead}px) / 2))` }
-    : undefined;
+  // Every button keeps a 44 px target (DESIGN 14.1). Portrait: the bar's padding, the dividers'
+  // margins and the gaps give way first on narrow screens (down to 4 px beside the bar at 320 px).
+  // Landscape: one column where the screen is tall enough, else a two-column rail, so the rail
+  // clears Help and leaves the bottom right free for toasts (see `components/ui/sonner.tsx`).
+  const style = { '--tb': `${TARGET}px`, ...(landscape ? railVars(grid ? layout.grid : layout.column) : layout.bar) } as CSSProperties;
 
   const divider = (key: string) => (
-    <div key={key} aria-hidden="true" className={landscape ? 'h-px w-6 my-1 bg-border shrink-0' : 'w-px h-6 mx-1 bg-border shrink-0'} />
+    <div
+      key={key}
+      aria-hidden="true"
+      className={
+        landscape
+          ? cn('h-px my-1 bg-border shrink-0', grid ? 'col-span-2 mx-1.5' : 'w-6')
+          : 'w-px h-6 mx-[var(--tb-div)] bg-border shrink-0'
+      }
+    />
   );
+  // Two-column rail: each button sits in a cell; a group's odd last item spans both columns, centered.
+  const items = groups.flatMap((g, gi) => {
+    const cells = grid
+      ? g.map((node, i) => (
+          <div key={`c${gi}-${i}`} className={cn('flex justify-center', i === g.length - 1 && g.length % 2 === 1 && 'col-span-2')}>
+            {node}
+          </div>
+        ))
+      : g;
+    return gi === 0 ? cells : [divider(`d${gi}`), ...cells];
+  });
 
   return (
     <>
@@ -352,8 +384,8 @@ export function StatusBar(props: StatusBarProps) {
 
       <button
         type="button"
-        aria-label={t('game.showHelp')}
-        title={t('game.showHelp')}
+        aria-label={helpLabel}
+        title={helpLabel}
         data-slot="help"
         tabIndex={visible ? undefined : -1}
         {...help}
@@ -374,20 +406,24 @@ export function StatusBar(props: StatusBarProps) {
         aria-hidden={visible ? undefined : true}
         ref={barRef}
         data-mode={mode}
-        style={{ '--tb': size, ...railStyle } as CSSProperties}
+        data-columns={grid ? 2 : 1}
+        style={style}
         className={cn(
-          'fixed z-chrome flex items-center gap-0.5 rounded-full',
+          'fixed z-chrome',
           GLASS,
           'transition-[opacity,transform] duration-chrome ease-out',
           landscape
-            ? 'flex-col px-1.5 py-4 right-[max(1rem,env(safe-area-inset-right))]'
-            : 'px-2 py-1.5 left-1/2 -translate-x-1/2 bottom-[max(1rem,env(safe-area-inset-bottom))]',
+            ? cn(
+                'top-[var(--rail-top)] right-[max(1rem,env(safe-area-inset-right))]',
+                grid ? 'grid grid-cols-2 gap-0.5 rounded-3xl p-1.5' : 'flex flex-col items-center gap-0.5 rounded-full px-1.5 py-4',
+              )
+            : 'flex items-center gap-[var(--tb-gap)] rounded-full px-[var(--tb-pad)] py-1.5 left-1/2 -translate-x-1/2 bottom-[max(1rem,env(safe-area-inset-bottom))]',
           // hide toward the owning edge (Ztyle 07): bottom bar down, right rail right
           visible ? 'opacity-100' : 'opacity-0 pointer-events-none',
           landscape ? (visible ? 'translate-x-0' : 'translate-x-4') : visible ? 'translate-y-0' : 'translate-y-4',
         )}
       >
-        {groups.flatMap((g, i) => (i === 0 ? g : [divider(`d${i}`), ...g]))}
+        {items}
       </div>
     </>
   );

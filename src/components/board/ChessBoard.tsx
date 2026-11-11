@@ -98,8 +98,11 @@ export function ChessBoard({
 
   /* ---- focus ---- */
 
-  const focusSquare = useCallback((sq: Square) => {
-    gridRef.current?.querySelector<HTMLElement>(`[data-square="${sq}"]`)?.focus({ preventScroll: true });
+  // `visible`: show the focus ring even after a pointer tap (`focusVisible`, not yet in TS's DOM types),
+  // so a hint stays marked when reduced motion removes its pulse (DESIGN 5.3, 14.1).
+  const focusSquare = useCallback((sq: Square, visible = false) => {
+    const opts = { preventScroll: true, ...(visible ? { focusVisible: true } : {}) } as FocusOptions;
+    gridRef.current?.querySelector<HTMLElement>(`[data-square="${sq}"]`)?.focus(opts);
   }, []);
 
   // Arrow keys move the DOM focus with the cursor while the board has focus.
@@ -115,7 +118,7 @@ export function ChessBoard({
   useEffect(() => {
     if (hintKey > 0 && hints && hints[0]) {
       setCursor(hints[0]);
-      focusSquare(hints[0]);
+      focusSquare(hints[0], true);
     }
     // Only when a new hint arrives.
     // eslint-disable-next-line react-hooks/exhaustive-deps

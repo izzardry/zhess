@@ -29,6 +29,39 @@ describe('InfoPill', () => {
     expect(cell('moves').querySelector('[data-piece="wb"]')).not.toBeNull();
   });
 
+  it('keeps all three cells at every width; below 360 px they fold into two rows (DESIGN 4.2)', () => {
+    renderWithI18n(<InfoPill {...props({ opponent: { kind: 'room', score: [1, 0] } })} />);
+    const pill = screen.getByRole('group', { name: 'Game info' });
+    // No cell is hidden on narrow phones (the room score is the only one on screen in a room).
+    for (const name of ['code', 'opponent', 'moves']) {
+      expect(cell(name).className).not.toMatch(/hidden/);
+      expect(cell(name).parentElement!.className).not.toMatch(/hidden/);
+    }
+    expect(cell('opponent')).toHaveTextContent('1 – 0');
+    expect(pill.className).toContain('max-[359px]:inline-grid');
+    expect(cell('moves').className).toContain('max-[359px]:col-span-3');
+  });
+
+  it('gives every cell the same eyebrow-over-value structure, so the rows line up', () => {
+    renderWithI18n(<InfoPill {...props({ presence: <span data-testid="dot" /> })} />);
+    const eyebrows = new Set<string>();
+    for (const name of ['code', 'opponent', 'moves']) {
+      const el = cell(name);
+      expect(el.className).toContain('flex-col');
+      const [eyebrow, value] = Array.from(el.children) as HTMLElement[];
+      eyebrows.add(eyebrow.className);
+      // A fixed-height value line, so the presence dot and figurines do not shift the baseline.
+      expect(value.className).toContain('h-5');
+      expect(value.className).toContain('items-center');
+    }
+    expect(eyebrows.size).toBe(1);
+  });
+
+  it('the move strip button scales when pressed (Ztyle 08)', () => {
+    renderWithI18n(<InfoPill {...props()} />);
+    expect(cell('moves').className).toContain('active:scale-95');
+  });
+
   it('follows the cursor and shows only white’s move when it was last', () => {
     renderWithI18n(<InfoPill {...props({ cursor: 3 })} />);
     expect(cell('moves')).toHaveTextContent('2.');

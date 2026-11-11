@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { Loader2, Share2 } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { formatElapsed } from '@/lib/timeUtils';
@@ -128,7 +128,18 @@ export function GameOverOverlay({
   const texts = endTexts(end, mode, myColor);
   const n = fullMoves(plies);
   const opponent = mode === 'computer' ? `${t('level')} ${level ?? ''}`.trim() : mode === 'local' ? t('twoPlayers') : t('room');
-  const summary = [code, opponent, n === 1 ? t('game.summary.move') : t('game.summary.moves', { n }), formatElapsed(durationMs)].join(' • ');
+  const summaryParts = [code, opponent, n === 1 ? t('game.summary.move') : t('game.summary.moves', { n }), formatElapsed(durationMs)];
+  // Lines break only between whole parts; each separator travels with the part after it, so no
+  // line ends in a bullet and no number is split from its unit.
+  const summary = summaryParts.map((part, i) => (
+    <Fragment key={i}>
+      {i > 0 && ' '}
+      <span className="whitespace-nowrap" data-part="summary">
+        {i > 0 && '• '}
+        {part}
+      </span>
+    </Fragment>
+  ));
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     // Keys from the share menu (portaled, but bubbling through the React tree) belong to the menu.

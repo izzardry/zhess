@@ -27,6 +27,10 @@ describe('GameOverOverlay', () => {
     const dialog = screen.getByRole('dialog', { name: 'Checkmate!' });
     expect(within(dialog).getByText('🎉')).toHaveAttribute('aria-hidden', 'true');
     expect(dialog).toHaveAccessibleDescription('K7QW2M • Level 5 • 34 moves • 12:08');
+    // Each part (with the bullet before it) is one unbreakable piece: no dangling bullet, no split `34 moves`.
+    const parts = Array.from(document.querySelectorAll('[data-part="summary"]'));
+    expect(parts.map((p) => p.textContent)).toEqual(['K7QW2M', '• Level 5', '• 34 moves', '• 12:08']);
+    for (const p of parts) expect(p).toHaveClass('whitespace-nowrap');
     expect(within(dialog).getByRole('button', { name: 'Share' })).toHaveClass('btn-ghost');
     expect(within(dialog).getByRole('button', { name: 'New game' })).toHaveClass('btn-primary');
   });

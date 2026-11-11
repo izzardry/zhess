@@ -13,8 +13,8 @@ export interface ToolbarButtonProps extends Omit<ButtonHTMLAttributes<HTMLButton
 }
 
 /**
- * A toolbar icon button: `.icon-button`, sized by the bar's `--tb` variable (44 px where it fits,
- * DESIGN 14.1), with an optional long press that suppresses its trailing click.
+ * A toolbar icon button: `.icon-button`, sized by the bar's `--tb` variable (always 44 px, the
+ * least touch target of DESIGN 14.1), with an optional long press that suppresses its trailing click.
  */
 export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(function ToolbarButton(
   { label, icon, onClick, hold, className, disabled, ...rest },

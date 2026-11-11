@@ -7,6 +7,7 @@ import { createStore, memoryStorage } from '@/lib/storage';
 import type { ColorChoice, Language, Opponent, TimeControl } from '@/lib/types';
 import { BackToTop } from './BackToTop';
 import { BoardPreview } from './BoardPreview';
+import { NO_FIT, PREVIEW_GAP, PREVIEW_MIN_SCALE, previewFit } from './previewFit';
 import { CLOCK_HOLD_MS, ClockPill } from './ClockPill';
 import { CodeSelector } from './CodeSelector';
 import { ColorPill } from './ColorPill';
@@ -446,6 +447,72 @@ describe('BoardPreview', () => {
     const overlay = screen.getByText('go').parentElement!;
     expect(overlay).toHaveAttribute('data-visible', 'false');
     expect(overlay).toHaveAttribute('inert');
+  });
+
+  it('draws the blurred board between the start header and footer (DESIGN 4.1), the pill following it', () => {
+    // 1280x800: header ends at 175, footer starts at 600; the board box is 490 px tall at 155.
+    const rect = (top: number, height: number) => ({ top, height, bottom: top + height, left: 0, right: 0, width: height, x: 0, y: top, toJSON() {} }) as DOMRect;
+    const spy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      return this.dataset.testid === 'board-preview' ? rect(155, 490) : rect(0, 0);
+    });
+    const metric = (el: HTMLElement, top: number, height: number) => {
+      Object.defineProperty(el, 'offsetTop', { configurable: true, value: top });
+      Object.defineProperty(el, 'offsetHeight', { configurable: true, value: height });
+    };
+    function Chrome() {
+      return (
+        <>
+          <header data-start-edge="top" ref={(el) => el && metric(el, 16, 159)} />
+          <div data-start-edge="bottom" ref={(el) => el && metric(el, 600, 160)} />
+        </>
+      );
+    }
+    try {
+      const { rerender } = wrap(
+        <>
+          <Chrome />
+          <BoardPreview blurred overlay={<span>go</span>}>
+            <div data-testid="board">board</div>
+          </BoardPreview>
+        </>,
+      );
+      const slot = screen.getByTestId('board').parentElement!;
+      const fit = previewFit({ boardTop: 155, boardHeight: 490, top: 175, bottom: 600 });
+      expect(fit.scale).toBeLessThan(1);
+      expect(slot.style.scale).toBe(String(fit.scale));
+      expect(slot.style.translate).toBe(`0 ${fit.dy}px`);
+      expect(screen.getByText('go').parentElement!.style.translate).toBe(`0 ${fit.dy}px`);
+      // In the game the board is at full size in its place.
+      rerender(
+        <>
+          <Chrome />
+          <BoardPreview blurred={false} animate overlay={<span>go</span>}>
+            <div data-testid="board">board</div>
+          </BoardPreview>
+        </>,
+      );
+      expect(screen.getByTestId('board').parentElement!.style.scale).toBe('');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+
+describe('previewFit', () => {
+  it('scales and centres the board between the chrome with a gap, never below 0.3', () => {
+    const fit = previewFit({ boardTop: 155, boardHeight: 490, top: 175, bottom: 600 });
+    const h = 490 * fit.scale;
+    const centre = 155 + 245 + fit.dy;
+    expect(centre - h / 2).toBeCloseTo(175 + PREVIEW_GAP);
+    expect(centre + h / 2).toBeCloseTo(600 - PREVIEW_GAP);
+    expect(previewFit({ boardTop: 0, boardHeight: 1000, top: 0, bottom: 100 }).scale).toBe(PREVIEW_MIN_SCALE);
+  });
+
+  it('leaves a board that fits alone, and only shifts one that fits but overlaps', () => {
+    expect(previewFit({ boardTop: 200, boardHeight: 300, top: 100, bottom: 700 })).toBe(NO_FIT);
+    expect(previewFit({ boardTop: 100, boardHeight: 300, top: 150, bottom: 700 })).toEqual({ scale: 1, dy: 50 + PREVIEW_GAP });
+    expect(previewFit({ boardTop: 0, boardHeight: 0, top: 100, bottom: 700 })).toBe(NO_FIT);
+    expect(previewFit({ boardTop: 0, boardHeight: 300, top: 400, bottom: 300 })).toBe(NO_FIT);
   });
 });
 

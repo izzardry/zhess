@@ -7,7 +7,7 @@ import { DIAL_GEOMETRY } from '@/lib/clock';
 /** Gap between the dial's items and the caption below it. */
 export const CAPTION_GAP = 36;
 /** Height of the caption pill: 10 px text at line-height 1.5, `py-1`, a 1 px border (rounded up). */
-const CAPTION_HEIGHT = 26;
+export const CAPTION_HEIGHT = 26;
 /** Least distance between the dial (or its caption) and the edge of the viewport. */
 export const DIAL_MARGIN = 8;
 
@@ -58,4 +58,16 @@ export function clampCenter(x: number, y: number, view: DialViewport = currentVi
     x: view.width >= 2 * side ? Math.max(side, Math.min(view.width - side, x)) : x,
     y: floor >= top ? Math.max(top, Math.min(floor, y)) : y,
   };
+}
+
+/**
+ * Which side of the ring the caption goes on. Below by default. When the clamp pushed the dial up so
+ * far that the hold point (the clock pill) lies below the ring, a caption below would sit right on
+ * the pill and hide its label (mobile landscape): it goes above the ring instead, if it fits there.
+ */
+export function captionSide(press: { y: number }, center: { y: number }): 'below' | 'above' {
+  const { radius } = DIAL_GEOMETRY;
+  const pushedUp = press.y - center.y > radius;
+  const roomAbove = center.y - (radius + CAPTION_GAP + CAPTION_HEIGHT) >= DIAL_MARGIN;
+  return pushedUp && roomAbove ? 'above' : 'below';
 }

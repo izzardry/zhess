@@ -6,6 +6,9 @@
  * - Rejoin declined.
  * - Waiting for the opponent to let this device in (after `joiningDelayMs`, so a first join that
  *   is welcomed at once does not flash it).
+ * - `Waiting for opponent` while a device without a seat waits as anchor (DESIGN 9.5: an invite
+ *   link opened while the other app is closed, or a lost device returning while the survivor is
+ *   offline). Also after `joiningDelayMs`, so a quick claim-then-dial does not flash it.
  *
  * Renders nothing in every other state. Default placement: centered over the stage; pass
  * `className` to place it elsewhere.
@@ -24,41 +27,51 @@ export interface RoomBannerProps {
   onTakeOver?: () => void;
   /** `Reload` in the version state. Default `location.reload()`. */
   onReload?: () => void;
-  /** Wait before showing the joining message. Default 1000 ms. */
+  /**
+   * This device has no seat and waits as anchor for the opponent (see `waitsAsAnchor` in text.ts):
+   * shows `Waiting for opponent`.
+   */
+  waiting?: boolean;
+  /** Wait before showing the joining or waiting message. Default 1000 ms. */
   joiningDelayMs?: number;
   className?: string;
 }
 
-type Kind = 'other-tab' | 'version' | 'denied' | 'joining' | null;
+type Kind = 'other-tab' | 'version' | 'denied' | 'joining' | 'waiting' | null;
 
-function kindOf(tab: TabState, phase: RoomPhase | null | undefined): Kind {
+function kindOf(tab: TabState, phase: RoomPhase | null | undefined, waiting: boolean): Kind {
   if (tab === 'other') return 'other-tab';
   if (tab !== 'owner') return null;
   if (phase === 'version') return 'version';
   if (phase === 'denied') return 'denied';
   if (phase === 'joining') return 'joining';
+  if (waiting && phase === 'connecting') return 'waiting';
   return null;
 }
 
-export function RoomBanner({ tab, phase, onTakeOver, onReload, joiningDelayMs = 1000, className }: RoomBannerProps) {
+/** Kinds that show only after `joiningDelayMs`. */
+const DELAYED: ReadonlySet<Kind> = new Set<Kind>(['joining', 'waiting']);
+
+export function RoomBanner({ tab, phase, waiting = false, onTakeOver, onReload, joiningDelayMs = 1000, className }: RoomBannerProps) {
   const { t } = useI18n();
-  const kind = kindOf(tab, phase);
-  const [joiningShown, setJoiningShown] = useState(false);
+  const kind = kindOf(tab, phase, waiting);
+  const delayed = DELAYED.has(kind);
+  const [shownKind, setShownKind] = useState<Kind>(null);
 
   useEffect(() => {
-    if (kind !== 'joining') {
-      setJoiningShown(false);
+    if (!delayed) {
+      setShownKind(null);
       return;
     }
     if (joiningDelayMs <= 0) {
-      setJoiningShown(true);
+      setShownKind(kind);
       return;
     }
-    const id = setTimeout(() => setJoiningShown(true), joiningDelayMs);
+    const id = setTimeout(() => setShownKind(kind), joiningDelayMs);
     return () => clearTimeout(id);
-  }, [kind, joiningDelayMs]);
+  }, [kind, delayed, joiningDelayMs]);
 
-  if (!kind || (kind === 'joining' && !joiningShown)) return null;
+  if (!kind || (delayed && shownKind !== kind)) return null;
 
   let text: string;
   let action: JSX.Element | null = null;
@@ -83,6 +96,9 @@ export function RoomBanner({ tab, phase, onTakeOver, onReload, joiningDelayMs = 
     case 'denied':
       text = t('room.denied');
       break;
+    case 'waiting':
+      text = t('room.presence.waiting');
+      break;
     default:
       text = t('room.joining');
   }
@@ -98,7 +114,7 @@ export function RoomBanner({ tab, phase, onTakeOver, onReload, joiningDelayMs = 
         className,
       )}
     >
-      {kind === 'joining' && <Loader2 className="w-5 h-5 animate-spin motion-reduce:animate-none text-muted-foreground" aria-hidden="true" />}
+      {delayed && <Loader2 className="w-5 h-5 animate-spin motion-reduce:animate-none text-muted-foreground" aria-hidden="true" />}
       <p className="text-sm">{text}</p>
       {action}
     </div>

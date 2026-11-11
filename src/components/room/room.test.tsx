@@ -25,6 +25,7 @@ import {
   requestKey,
   shouldOfferInvite,
   signalOf,
+  waitsAsAnchor,
   withoutSignal,
 } from './index';
 import { createFakeController, fakeRoomState, renderRoom, type FakeController } from './testUtils';
@@ -92,6 +93,15 @@ describe('room text helpers', () => {
     expect(shouldOfferInvite(fakeRoomState({ lastSeenAt: 5 }))).toBe(false);
     expect(shouldOfferInvite(fakeRoomState({ live: true }))).toBe(false);
     expect(shouldOfferInvite(fakeRoomState({ phase: 'read-only' }))).toBe(false);
+  });
+
+  it('a device without a seat waiting as anchor shows `Waiting for opponent` (DESIGN 9.5)', () => {
+    expect(waitsAsAnchor(null)).toBe(false);
+    expect(waitsAsAnchor(fakeRoomState({ seat: null }))).toBe(true);
+    // A seated creator gets the invite sheet instead.
+    expect(waitsAsAnchor(fakeRoomState())).toBe(false);
+    expect(waitsAsAnchor(fakeRoomState({ seat: null, presence: 'connecting', role: 'dialer' }))).toBe(false);
+    expect(waitsAsAnchor(fakeRoomState({ seat: null, phase: 'handshake' }))).toBe(false);
   });
 
   it('reads and clears the transient x / y parameters (DESIGN 13.2)', () => {
@@ -579,6 +589,26 @@ describe('RoomBanner', () => {
       vi.advanceTimersByTime(1000);
     });
     expect(screen.getByText('Asking your opponent for a seat…')).toBeInTheDocument();
+  });
+
+  it('shows `Waiting for opponent` while a seatless device waits as anchor, after a moment', () => {
+    vi.useFakeTimers();
+    const { container, rerender } = renderRoom(<RoomBanner tab="owner" phase="connecting" waiting joiningDelayMs={1000} />);
+    expect(container.querySelector('[data-room-banner]')).toBeNull();
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(container.querySelector('[data-room-banner="waiting"]')).not.toBeNull();
+    expect(screen.getByRole('status')).toHaveTextContent('Waiting for opponent');
+    // The opponent's channel opens: the handshake replaces the message at once.
+    rerender(<RoomBanner tab="owner" phase="handshake" waiting />);
+    expect(container.querySelector('[data-room-banner]')).toBeNull();
+    // Without the waiting flag (e.g. a seated creator), nothing.
+    rerender(<RoomBanner tab="owner" phase="connecting" />);
+    act(() => {
+      vi.advanceTimersByTime(2000);
+    });
+    expect(container.querySelector('[data-room-banner]')).toBeNull();
   });
 });
 

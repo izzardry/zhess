@@ -126,6 +126,26 @@ describe('Index stage', () => {
     expect(after).not.toBe(before);
   });
 
+  it('face to face in mobile landscape: the far strip and clock in the left rail are rotated too (DESIGN 5.2)', () => {
+    const size = { w: window.innerWidth, h: window.innerHeight };
+    Object.defineProperty(window, 'innerWidth', { value: 844, configurable: true });
+    Object.defineProperty(window, 'innerHeight', { value: 390, configurable: true });
+    try {
+      renderStage();
+      startTwoPlayers();
+      const seat = toolbarButton(/face to face|side by side/i);
+      const rotatedTimers = () => screen.getAllByRole('timer').filter((el) => el.closest('.rotate-180')).length;
+      if (rotatedTimers() === 0) fireEvent.click(seat);
+      // Exactly the far player's clock is upside down.
+      expect(rotatedTimers()).toBe(1);
+      fireEvent.click(seat);
+      expect(rotatedTimers()).toBe(0);
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { value: size.w, configurable: true });
+      Object.defineProperty(window, 'innerHeight', { value: size.h, configurable: true });
+    }
+  });
+
   it('resigns on a 500 ms hold and the toast takes it back', () => {
     vi.useFakeTimers();
     renderStage();

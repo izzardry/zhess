@@ -58,7 +58,7 @@ export function ResignUndoToast({ open, who, onUndo, onExpire, durationMs = RESI
       aria-live="polite"
       className="fixed left-1/2 -translate-x-1/2 z-[60] bottom-[max(1.5rem,calc(env(safe-area-inset-bottom)+0.5rem))] w-[min(90vw,360px)]"
     >
-      <div className="toast animate-in slide-in-from-bottom-3 fade-in zoom-in-95 duration-[250ms] ease-out">
+      <div className="toast animate-in slide-in-from-bottom-3 fade-in zoom-in-95 [animation-duration:250ms] ease-out">
         <span className="text-sm truncate">{text}</span>
         <div className="flex items-center gap-1 shrink-0">
           <button type="button" onClick={settle(() => cb.current.onUndo())} className="toast-action">

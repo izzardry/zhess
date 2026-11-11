@@ -79,6 +79,16 @@ export function shouldOfferInvite(state: Pick<RoomState, 'seat' | 'lastSeenAt' |
   return !!state && state.seat === 0 && state.lastSeenAt === 0 && !state.live && state.phase !== 'read-only' && state.phase !== 'closed';
 }
 
+/**
+ * This device holds no seat yet and waits as anchor for the opponent (DESIGN 9.5, last row: "The
+ * returning device waits as anchor with `Waiting for opponent`"). Covers an invite link opened while
+ * the creator's app is closed and a lost device returning while the survivor is offline. A seated
+ * creator waiting for a joiner gets the invite sheet instead (`shouldOfferInvite`).
+ */
+export function waitsAsAnchor(state: Pick<RoomState, 'seat' | 'presence' | 'phase'> | null): boolean {
+  return !!state && state.seat === null && state.presence === 'waiting' && state.phase === 'connecting';
+}
+
 /* ---------------------------------------------------------------------------------------------- */
 /* `x` / `y` (DESIGN 13.2): manual signalling offer and answer, transient                          */
 /* ---------------------------------------------------------------------------------------------- */

@@ -79,21 +79,29 @@ function GameCardImpl({ game, room, now, onOpen, onDelete, renderThumbnail, thum
               </div>
             )}
             <div className="flex-1 min-w-0 space-y-1.5">
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="flex items-baseline gap-2 min-w-0">
-                  <span className="font-mono text-lg tracking-wider truncate">{game.code}</span>
-                  {game.room && (
-                    <span className="text-xs text-muted-foreground whitespace-nowrap">
-                      {t('platform.history.gameNumber', { n: game.room.n })}
-                    </span>
-                  )}
-                  {room && <span className="font-mono text-xs whitespace-nowrap">{formatRoomScore(room)}</span>}
+              {/* The code never shrinks (DESIGN 12.2); the time wraps under it on a narrow card. */}
+              <div className="flex flex-wrap items-baseline gap-x-2">
+                <span className="font-mono text-lg tracking-wider whitespace-nowrap shrink-0" data-part="code">
+                  {game.code}
                 </span>
-                <span className="text-xs text-muted-foreground whitespace-nowrap">
+                <span className="ml-auto text-xs text-muted-foreground whitespace-nowrap" data-part="time">
                   {formatRelativeTime(game.lastPlayedAt, now, language)}
                 </span>
               </div>
-              <div className="text-xs uppercase tracking-wider text-muted-foreground truncate">{opponent}</div>
+              {/* Room cards: the game number and the room score share the opponent line and wrap as whole parts. */}
+              <div className="flex flex-wrap items-baseline gap-x-2 text-xs">
+                <span className="min-w-0 truncate uppercase tracking-wider text-muted-foreground">{opponent}</span>
+                {game.room && (
+                  <span className="text-muted-foreground whitespace-nowrap" data-part="game-number">
+                    {t('platform.history.gameNumber', { n: game.room.n })}
+                  </span>
+                )}
+                {room && (
+                  <span className="ml-auto font-mono whitespace-nowrap" data-part="room-score">
+                    {formatRoomScore(room)}
+                  </span>
+                )}
+              </div>
               <div className="flex items-center justify-between gap-2">
                 <StateLabel state={state} />
                 <span className="flex items-center gap-2 font-mono text-xs text-muted-foreground whitespace-nowrap">

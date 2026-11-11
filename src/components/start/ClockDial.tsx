@@ -19,7 +19,7 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { CAPTION_GAP, clampCenter } from './dialPlacement';
+import { CAPTION_GAP, captionSide, clampCenter } from './dialPlacement';
 import {
   DIAL_GEOMETRY,
   DIAL_INCREMENTS,
@@ -70,6 +70,7 @@ export function ClockDial({ x, y, dragging = false, value = null, onPick, onCanc
   const [aim, setAim] = useState<{ zone: DialZone; index: number | null }>({ zone: 'center', index: null });
   const [band, setBand] = useState<{ dx: number; dy: number }>({ dx: 0, dy: 0 });
   const [center] = useState(() => clampCenter(x, y));
+  const [caption] = useState(() => captionSide({ y }, center));
   const drag = useRef<Drag | null>(dragging ? { ox: x, oy: y, fromHold: true, moved: false } : null);
   const menu = useRef<HTMLDivElement>(null);
 
@@ -277,8 +278,13 @@ export function ClockDial({ x, y, dragging = false, value = null, onPick, onCanc
         <span
           aria-hidden
           data-part="caption"
+          data-side={caption}
           className="pointer-events-none absolute whitespace-nowrap rounded-full border border-foreground/10 bg-card/90 px-3 py-1 font-mono text-[10px] font-semibold uppercase tracking-widest text-muted-foreground shadow-sm"
-          style={{ left: 0, top: radius + CAPTION_GAP, transform: 'translateX(-50%)' }}
+          style={
+            caption === 'below'
+              ? { left: 0, top: radius + CAPTION_GAP, transform: 'translateX(-50%)' }
+              : { left: 0, top: -(radius + CAPTION_GAP), transform: 'translate(-50%, -100%)' }
+          }
         >
           {step === 'minutes' ? t('clock.dialMinutesCaption') : `${minutes}+ · ${t('clock.dialIncrementCaption')}`}
         </span>

@@ -155,7 +155,7 @@ export function GameHistory({
               ref={moreButton}
               type="button"
               onClick={() => setShowAll(true)}
-              className="w-full mt-4 py-3 text-center text-sm font-mono uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors border border-border rounded-lg hover:border-foreground/30"
+              className="w-full mt-4 py-3 text-center text-sm font-mono uppercase tracking-wider text-muted-foreground hover:text-foreground transition-[color,border-color,transform] duration-fast active:scale-95 border border-border rounded-lg hover:border-foreground/30"
             >
               {more === 1 ? t('platform.history.oneMoreGame') : t('platform.history.moreGames', { count: more })}
             </button>

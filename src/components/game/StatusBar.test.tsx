@@ -1,6 +1,7 @@
 import { act, fireEvent, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { StatusBar, type StatusBarProps } from './StatusBar';
+import { toolbarLayout } from './toolbarLayout';
 import { renderWithI18n } from './testUtils';
 
 function props(over: Partial<StatusBarProps> = {}): StatusBarProps {
@@ -246,30 +247,95 @@ describe('StatusBar actions', () => {
     renderWithI18n(<StatusBar {...p} />);
     fireEvent.click(screen.getByRole('button', { name: 'Back to start' }));
     expect(p.onBack).toHaveBeenCalledTimes(1);
-    const help = screen.getByRole('button', { name: 'Show help' });
+    // The hold is announced in the aria-label (DESIGN 6.4).
+    const help = screen.getByRole('button', { name: 'Show help (hold for a surprise)' });
     fireEvent.click(help);
     expect(p.onHelp).toHaveBeenCalledTimes(1);
     hold(help, 3000);
     expect(p.onHelpHold).toHaveBeenCalledTimes(1);
     expect(p.onHelp).toHaveBeenCalledTimes(1);
   });
-});
 
-describe('StatusBar layout', () => {
-  it('portrait is a horizontal bar, landscape a vertical rail', () => {
-    const { rerender } = renderWithI18n(<StatusBar {...props()} />);
-    expect(screen.getByRole('toolbar')).toHaveAttribute('aria-orientation', 'horizontal');
-    expect(screen.getByRole('toolbar').className).toContain('bottom-');
-    rerender(<StatusBar {...props()} landscape />);
-    expect(screen.getByRole('toolbar')).toHaveAttribute('aria-orientation', 'vertical');
-    expect(screen.getByRole('toolbar').className).toContain('flex-col');
+  it('help without a hold action does not announce one', () => {
+    renderWithI18n(<StatusBar {...props()} />);
+    expect(screen.getByRole('button', { name: 'Show help' })).toBeInTheDocument();
   });
 
-  it('sizes buttons to fit: 44 px max, by the number of slots', () => {
+  it('announces the help hold in every language', () => {
+    renderWithI18n(<StatusBar {...props({ onHelpHold: vi.fn() })} />, 'de');
+    expect(screen.getByRole('button', { name: 'Hilfe anzeigen (halten für eine Überraschung)' })).toBeInTheDocument();
+  });
+});
+
+/** Evaluates the bar's spacing variables for a viewport width (they are clamp(min, calc(…), max)). */
+function px(expr: string, vw: number): number {
+  const js = expr
+    .replace(/100vw/g, String(vw))
+    .replace(/(\d+(?:\.\d+)?)px/g, '$1')
+    .replace(/calc\(/g, '(')
+    .replace(/clamp\(([^,]+),\s*(.+),\s*([^,()]+)\)$/, 'Math.min(Math.max($1, $2), $3)');
+  return Function(`return ${js}`)() as number;
+}
+
+function withMatchMedia(matches: (q: string) => boolean, fn: () => void) {
+  const original = window.matchMedia;
+  window.matchMedia = ((query: string) => ({ ...original(query), matches: matches(query) })) as typeof window.matchMedia;
+  try {
+    fn();
+  } finally {
+    window.matchMedia = original;
+  }
+}
+
+describe('StatusBar layout', () => {
+  it('portrait is a horizontal bar, landscape a vertical rail (one column where it fits)', () => {
+    withMatchMedia(
+      (q) => q.startsWith('(min-height'),
+      () => {
+        const { rerender } = renderWithI18n(<StatusBar {...props()} />);
+        expect(screen.getByRole('toolbar')).toHaveAttribute('aria-orientation', 'horizontal');
+        expect(screen.getByRole('toolbar').className).toContain('bottom-');
+        rerender(<StatusBar {...props()} landscape />);
+        expect(screen.getByRole('toolbar')).toHaveAttribute('aria-orientation', 'vertical');
+        expect(screen.getByRole('toolbar').className).toContain('flex-col');
+        expect(screen.getByRole('toolbar')).toHaveAttribute('data-columns', '1');
+      },
+    );
+  });
+
+  it('a short landscape screen folds the rail into two columns of 44 px buttons', () => {
+    renderWithI18n(<StatusBar {...props({ mode: 'local' })} landscape />);
+    const bar = screen.getByRole('toolbar');
+    expect(bar).toHaveAttribute('aria-orientation', 'vertical');
+    expect(bar).toHaveAttribute('data-columns', '2');
+    expect(bar.className).toContain('grid-cols-2');
+    expect(bar.style.getPropertyValue('--tb')).toBe('44px');
+    // The seating button, alone on its row in the assist group, spans both columns.
+    expect(screen.getByRole('button', { name: /seating|face|side/i }).closest('.col-span-2')).not.toBeNull();
+    // Rooms have four buttons: still one column when the screen is tall enough.
+    expect(toolbarLayout([1, 1, 2], true).column.height).toBeLessThan(toolbarLayout([2, 3, 2], true).column.height);
+  });
+
+  it('every toolbar button is a 44 px target; only the spacing shrinks (DESIGN 14.1)', () => {
     renderWithI18n(<StatusBar {...props({ mode: 'local' })} />);
-    const tb = screen.getByRole('toolbar').style.getPropertyValue('--tb');
-    expect(tb).toContain('/ 7');
-    expect(tb).toContain('44px');
+    const bar = screen.getByRole('toolbar');
+    expect(bar.style.getPropertyValue('--tb')).toBe('44px');
+    // Seven buttons in three groups fit at 320, 360 and 390 px with at least 4 px beside the bar.
+    const { bar: vars } = toolbarLayout([2, 3, 2], false);
+    for (const vw of [320, 360, 390, 430]) {
+      const pad = px(vars['--tb-pad'], vw);
+      const div = px(vars['--tb-div'], vw);
+      const gap = px(vars['--tb-gap'], vw);
+      expect(pad).toBeGreaterThanOrEqual(0);
+      expect(div).toBeGreaterThanOrEqual(0);
+      expect(gap).toBeGreaterThanOrEqual(0);
+      const width = 7 * 44 + 2 + 2 * 1 + 2 * pad + 4 * div + 8 * gap;
+      expect(width).toBeLessThanOrEqual(vw - 8 + 1e-9);
+    }
+    // Full spacing where there is room.
+    expect(px(vars['--tb-pad'], 390)).toBe(8);
+    expect(px(vars['--tb-div'], 390)).toBe(4);
+    expect(px(vars['--tb-gap'], 390)).toBe(2);
   });
 
   it('hidden chrome is out of reach: aria-hidden, inert, not focusable', () => {

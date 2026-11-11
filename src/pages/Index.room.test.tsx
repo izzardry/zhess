@@ -195,7 +195,11 @@ describe('Index stage in a room', () => {
     expect(stage()).toHaveAttribute('data-phase', 'start');
     await waitFor(() => expect(other.snapshot.presence).not.toBe('connected'));
     const cards = await screen.findAllByTestId('history-card');
-    expect(cards.map((c) => c.textContent)).toEqual([expect.stringMatching(/RMS001Game 21 – 0/), expect.stringMatching(/RMS001Game 11 – 0/)]);
+    // The card shows the code, then (on the opponent line, V-1 of the final pass) the game number and the score.
+    expect(cards.map((c) => c.textContent)).toEqual([
+      expect.stringMatching(/^RMS001.*RoomGame 21 – 0/),
+      expect.stringMatching(/^RMS001.*RoomGame 11 – 0/),
+    ]);
 
     // Resuming the current game reconnects to the room.
     fireEvent.click(cards[0]);

@@ -19,5 +19,6 @@ export {
   requestKey,
   shouldOfferInvite,
   signalOf,
+  waitsAsAnchor,
   withoutSignal,
 } from './text';

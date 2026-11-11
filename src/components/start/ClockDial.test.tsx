@@ -6,7 +6,7 @@ import { I18nProvider } from '@/lib/i18n';
 import { createStore, memoryStorage } from '@/lib/storage';
 import type { Language, TimeControl } from '@/lib/types';
 import { ClockDial, type ClockDialProps } from './ClockDial';
-import { clampCenter, DIAL_EXTENT, DIAL_MARGIN } from './dialPlacement';
+import { captionSide, clampCenter, DIAL_EXTENT, DIAL_MARGIN } from './dialPlacement';
 
 const wrap = (ui: ReactElement, language: Language = 'en') =>
   render(
@@ -264,6 +264,39 @@ describe('clampCenter', () => {
       mount({ x: 195, y: 800 });
       expect(dial().style.top).toBe(`${844 - DIAL_EXTENT.bottom}px`);
       expect(dial().style.left).toBe('195px');
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: before.w });
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: before.h });
+    }
+  });
+
+  it('puts the caption above the ring when the clamp pushed the dial off the pill (mobile landscape)', () => {
+    // 844x390: the clock pill near the bottom edge; the dial is pushed up by ~100 px.
+    const press = { x: 625, y: 352 };
+    const c = clampCenter(press.x, press.y, { width: 844, height: 390 });
+    expect(press.y - c.y).toBeGreaterThan(DIAL_GEOMETRY.radius);
+    expect(captionSide(press, c)).toBe('above');
+    // Portrait 390x844: the dial opens on the pill (pushed up only a little): caption below.
+    const p = { x: 250, y: 735 };
+    expect(captionSide(p, clampCenter(p.x, p.y, phone))).toBe('below');
+    // Not pushed at all: below.
+    expect(captionSide({ y: 400 }, { y: 400 })).toBe('below');
+    // No room above the ring: stays below.
+    expect(captionSide({ y: 300 }, { y: 100 })).toBe('below');
+  });
+
+  it('draws the caption above the ring, clear of the pill, in a short landscape viewport', () => {
+    const before = { w: window.innerWidth, h: window.innerHeight };
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 844 });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 390 });
+    try {
+      mount({ x: 625, y: 352 });
+      const cap = dial().querySelector('[data-part="caption"]') as HTMLElement;
+      expect(cap).toHaveAttribute('data-side', 'above');
+      const top = parseFloat(dial().style.top) + parseFloat(cap.style.top);
+      // The caption's bottom edge is above the ring and far above the press point.
+      expect(top).toBeLessThan(352 - DIAL_GEOMETRY.radius);
+      expect(cap.style.transform).toContain('-100%');
     } finally {
       Object.defineProperty(window, 'innerWidth', { configurable: true, value: before.w });
       Object.defineProperty(window, 'innerHeight', { configurable: true, value: before.h });

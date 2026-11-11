@@ -54,7 +54,7 @@ import {
   TutorialOverlay,
 } from '@/components/platform';
 import { BoardPreview, ClockDial, StartChrome, StartPill, useScrolled, type ClockPillAnchor } from '@/components/start';
-import { InviteSheet, ManualConnectSheet, PresenceDot, RoomBanner, RoomToasts, shouldOfferInvite } from '@/components/room';
+import { InviteSheet, ManualConnectSheet, PresenceDot, RoomBanner, RoomToasts, shouldOfferInvite, waitsAsAnchor } from '@/components/room';
 import { useIsMobileLandscape } from '@/hooks/use-orientation';
 import { useBlunderGuard } from '@/hooks/useBlunderGuard';
 import { useClock, usePremove } from '@/hooks/useClock';
@@ -748,7 +748,8 @@ export default function Index() {
                   'flex flex-col items-center justify-center gap-3 [&>*]:pointer-events-auto',
                 )}
               >
-                {strip(farColor, false, 'rail')}
+                {/* Face to face, the far player's strip and clock are drawn rotated here too (DESIGN 5.2). */}
+                {strip(farColor, faceToFace, 'rail')}
                 <div
                   aria-hidden={chromeVisible ? undefined : true}
                   className={cn(
@@ -847,7 +848,7 @@ export default function Index() {
                 onStartOver={room.restartManual}
               />
             )}
-            <RoomBanner tab={room.tab} phase={rs?.phase} onTakeOver={room.takeOver} />
+            <RoomBanner tab={room.tab} phase={rs?.phase} waiting={waitsAsAnchor(rs)} onTakeOver={room.takeOver} />
           </>
         )}
 

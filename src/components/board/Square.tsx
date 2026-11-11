@@ -158,7 +158,7 @@ export const BoardSquare = memo(function BoardSquare({
           style={{ outlineOffset: '-3px' }}
         />
       )}
-      {hintKey > 0 && <span key={hintKey} aria-hidden className="pointer-events-none absolute inset-0 animate-hint-pulse" />}
+      {hintKey > 0 && <span key={hintKey} aria-hidden data-marker="hint" className="zhess-hint pointer-events-none absolute inset-0 animate-hint-pulse" />}
     </div>
   );
 });
