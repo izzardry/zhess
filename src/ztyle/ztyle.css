@@ -1,0 +1,340 @@
+/* Copied verbatim from Ztyle (~/Workspace/ztyle/tokens/ztyle.css, github.com/izzardry/ztyle, rev d29758b).
+   Do not edit here: change Ztyle and copy again. Zhess-specific styles go in src/index.css. */
+/* ==========================================================================
+   Ztyle — izzardry design tokens & component recipes
+   Plain CSS, no build step. Works standalone or next to Tailwind
+   (pair with tokens/tailwind.preset.ts so utilities like bg-foreground/10 work).
+   Extracted from Zudoku. Docs: ../docs/
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Tokens — HSL triplets (use as hsl(var(--x)) or hsl(var(--x) / .1))
+   `.light` / `.dark` can also scope a subtree (e.g. side-by-side previews).
+   -------------------------------------------------------------------------- */
+:root, .light {
+  --background: 0 0% 98%;
+  --foreground: 0 0% 5%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 5%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 5%;
+  --primary: 0 0% 5%;
+  --primary-foreground: 0 0% 98%;
+  --secondary: 0 0% 92%;
+  --secondary-foreground: 0 0% 15%;
+  --muted: 0 0% 96%;
+  --muted-foreground: 0 0% 45%;
+  --accent: 0 0% 90%;
+  --accent-foreground: 0 0% 10%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 98%;
+  --success: 142 76% 36%;
+  --success-foreground: 0 0% 98%;
+  --border: 0 0% 85%;
+  --input: 0 0% 85%;
+  --ring: 0 0% 5%;
+
+  --radius: 0.5rem;
+
+  /* Type */
+  --font-mono: "Fira Code", "JetBrains Mono", "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  --tracking-mark: 0.3em;
+  --tracking-widest: 0.1em;
+  --tracking-wider: 0.05em;
+  --tracking-wide: 0.025em;
+
+  /* Motion */
+  --dur-instant: 100ms;
+  --dur-fast: 150ms;
+  --dur-base: 200ms;
+  --dur-chrome: 300ms;
+  --dur-screen: 500ms;
+  --dur-pulse: 800ms;
+  --dur-ambient: 1000ms;
+  --ease: cubic-bezier(0, 0, 0.2, 1); /* ease-out */
+
+  /* Elevation */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+
+  /* Game grid (9 columns by default; override per game) */
+  --cell-size: clamp(28px, min(8vw, 8vh), 52px);
+
+  /* Safe-area insets with design minimums */
+  --inset-top: max(1.5rem, env(safe-area-inset-top));
+  --inset-left: max(1rem, env(safe-area-inset-left));
+  --inset-right: max(1rem, env(safe-area-inset-right));
+  --inset-bottom: max(1rem, env(safe-area-inset-bottom));
+
+  color-scheme: light;
+}
+
+.dark {
+  --background: 0 0% 5%;
+  --foreground: 0 0% 95%;
+  --card: 0 0% 8%;
+  --card-foreground: 0 0% 95%;
+  --popover: 0 0% 8%;
+  --popover-foreground: 0 0% 95%;
+  --primary: 0 0% 95%;
+  --primary-foreground: 0 0% 5%;
+  --secondary: 0 0% 15%;
+  --secondary-foreground: 0 0% 90%;
+  --muted: 0 0% 12%;
+  --muted-foreground: 0 0% 55%;
+  --accent: 0 0% 18%;
+  --accent-foreground: 0 0% 95%;
+  --destructive: 0 62% 50%;
+  --destructive-foreground: 0 0% 98%;
+  --success: 142 70% 45%;
+  --success-foreground: 0 0% 98%;
+  --border: 0 0% 20%;
+  --input: 0 0% 20%;
+  --ring: 0 0% 80%;
+  color-scheme: dark;
+}
+
+/* --------------------------------------------------------------------------
+   2. Base
+   -------------------------------------------------------------------------- */
+*, *::before, *::after { box-sizing: border-box; border-color: hsl(var(--border)); }
+
+html, body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100%;
+  min-height: 100dvh;
+}
+
+:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
+
+/* --------------------------------------------------------------------------
+   3. Texture
+   -------------------------------------------------------------------------- */
+.halftone-bg {
+  background-image: radial-gradient(circle, hsl(var(--foreground) / 0.03) 1px, transparent 1px);
+  background-size: 8px 8px;
+}
+.halftone-dense {
+  background-image: radial-gradient(circle, hsl(var(--foreground) / 0.06) 1px, transparent 1px);
+  background-size: 4px 4px;
+}
+
+/* --------------------------------------------------------------------------
+   4. Type roles
+   -------------------------------------------------------------------------- */
+.wordmark      { font-weight: 300; letter-spacing: var(--tracking-mark); text-transform: uppercase; font-size: 1.875rem; line-height: 2.25rem; }
+@media (min-width: 640px) { .wordmark { font-size: 2.25rem; line-height: 2.5rem; } }
+.tagline       { font-size: .875rem; line-height: 1.25rem; color: hsl(var(--muted-foreground)); }
+.code-display  { font-weight: 300; letter-spacing: var(--tracking-widest); font-size: 1.5rem; line-height: 2rem; }
+@media (min-width: 640px) { .code-display { font-size: 1.875rem; line-height: 2.25rem; } }
+@media (min-width: 768px) { .code-display { font-size: 2.25rem; line-height: 2.5rem; } }
+.overline      { font-size: .875rem; line-height: 1.25rem; text-transform: uppercase; letter-spacing: var(--tracking-wider); color: hsl(var(--muted-foreground)); }
+.eyebrow       { font-size: 10px; line-height: 1rem; text-transform: uppercase; letter-spacing: var(--tracking-wider); color: hsl(var(--muted-foreground)); }
+.stat-value    { font-size: .875rem; line-height: 1.25rem; letter-spacing: var(--tracking-widest); }
+.meta          { font-size: .75rem; line-height: 1rem; color: hsl(var(--muted-foreground)); }
+.whisper       { font-size: .75rem; line-height: 1rem; color: hsl(var(--muted-foreground) / .7); text-transform: lowercase; }
+.micro         { font-size: 10px; color: hsl(var(--muted-foreground) / .3); }
+
+/* --------------------------------------------------------------------------
+   5. Buttons
+   -------------------------------------------------------------------------- */
+.btn-primary, .btn-ghost, .icon-button, .fab, .pill-sm {
+  font-family: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent;
+  display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+  transition: all var(--dur-base) var(--ease);
+  user-select: none;
+}
+.btn-primary:active, .btn-ghost:active, .icon-button:active, .fab:active, .pill-sm:active { transform: scale(.95); }
+
+.btn-primary {
+  padding: .75rem 2rem; border-radius: 9999px;
+  background: hsl(var(--foreground)); color: hsl(var(--background));
+  border: 2px solid hsl(var(--foreground));
+  font-size: .875rem; line-height: 1.25rem; text-transform: uppercase; letter-spacing: var(--tracking-wider);
+}
+.btn-primary:hover { opacity: .9; }
+
+.btn-ghost {
+  padding: .5rem 1rem; border-radius: 9999px;
+  background: transparent; color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--foreground) / .2);
+  font-size: .75rem; line-height: 1rem; text-transform: uppercase; letter-spacing: var(--tracking-wider);
+}
+.btn-ghost:hover { background: hsl(var(--foreground) / .05); }
+
+.icon-button {
+  padding: .5rem; border-radius: 9999px; border: 0; background: transparent;
+  color: hsl(var(--foreground) / .7);
+  transition-duration: var(--dur-fast);
+}
+.icon-button:hover { color: hsl(var(--foreground)); background: hsl(var(--foreground) / .1); }
+.icon-button:disabled, .icon-button[aria-disabled="true"] { opacity: .3; cursor: not-allowed; }
+.icon-button svg { width: 20px; height: 20px; }
+@media (pointer: coarse) { .icon-button { padding: .625rem; } } /* 40→44px targets */
+
+.fab {
+  width: 2.5rem; height: 2.5rem; border-radius: 9999px;
+  background: hsl(var(--card) / .8); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  border: 1px solid hsl(var(--border)); box-shadow: var(--shadow-lg);
+  color: hsl(var(--muted-foreground));
+}
+.fab:hover { color: hsl(var(--foreground)); }
+.fab--lg { width: 3rem; height: 3rem; background: hsl(var(--card) / .9); }
+.fab svg { width: 20px; height: 20px; }
+
+.pill-sm {
+  padding: .375rem .75rem; border-radius: 9999px;
+  border: 1px solid hsl(var(--border)); background: hsl(var(--card) / .8);
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  font-size: .75rem; letter-spacing: var(--tracking-wide); color: hsl(var(--muted-foreground));
+}
+.pill-sm:hover { color: hsl(var(--foreground)); background: hsl(var(--muted)); }
+.pill-sm svg { width: 12px; height: 12px; }
+
+/* --------------------------------------------------------------------------
+   6. Floating chrome & surfaces
+   -------------------------------------------------------------------------- */
+.glass {
+  background: hsl(var(--card) / .8); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  border: 1px solid hsl(var(--border)); box-shadow: var(--shadow-lg);
+}
+.chrome-bar { display: flex; align-items: center; gap: .5rem; padding: .5rem 1rem; border-radius: 9999px; }
+.chrome-bar--vertical { flex-direction: column; padding: 1rem .5rem; }
+.chrome-panel { display: inline-flex; align-items: center; gap: 1rem; padding: .5rem 1rem; border-radius: 1rem; text-align: center; }
+.chrome-divider   { width: 1px; height: 1.5rem; margin: 0 .25rem; background: hsl(var(--border)); }
+.chrome-divider--h { width: 1.5rem; height: 1px; margin: .25rem 0; }
+
+/* Show/hide toward the owning edge */
+.chrome-anim { transition: opacity var(--dur-chrome) var(--ease), transform var(--dur-chrome) var(--ease); }
+.is-hidden-up    { opacity: 0; transform: translateY(-1rem); pointer-events: none; }
+.is-hidden-down  { opacity: 0; transform: translateY(1rem);  pointer-events: none; }
+.is-hidden-left  { opacity: 0; transform: translateX(-2rem); pointer-events: none; }
+.is-hidden-right { opacity: 0; transform: translateX(1rem);  pointer-events: none; }
+.is-hidden-scale { opacity: 0; transform: scale(.9);         pointer-events: none; }
+
+.card {
+  background: hsl(var(--card)); color: hsl(var(--card-foreground));
+  border: 1px solid hsl(var(--border)); border-radius: var(--radius);
+}
+.list-card {
+  padding: 1rem; border-radius: var(--radius); border: 1px solid hsl(var(--border)); background: hsl(var(--card));
+  transition: all var(--dur-base) var(--ease); cursor: pointer;
+}
+.list-card:hover { border-color: hsl(var(--foreground) / .3); box-shadow: var(--shadow-sm); }
+
+.bubble {
+  background: hsl(var(--card) / .95); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  border: 1px solid hsl(var(--border)); border-radius: .75rem; box-shadow: var(--shadow-xl);
+  padding: .75rem 1rem; font-size: .875rem; max-width: 200px;
+}
+.toast {
+  display: flex; align-items: center; justify-content: space-between; gap: .75rem;
+  padding: .75rem 1rem; border-radius: .75rem; background: hsl(var(--card));
+  border: 1px solid hsl(var(--border)); box-shadow: var(--shadow-lg); font-size: .875rem;
+}
+.toast-action {
+  padding: .25rem .75rem; border-radius: .375rem; border: 0; cursor: pointer; font-family: inherit;
+  background: hsl(var(--foreground)); color: hsl(var(--background));
+  font-size: .75rem; text-transform: uppercase; letter-spacing: var(--tracking-wider);
+}
+.toast-action:hover { opacity: .9; }
+.toast-action:active { transform: scale(.95); }
+
+.scrim       { background: hsl(var(--background) / .8); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+.scrim--soft { background: hsl(var(--background) / .6); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }
+
+.code-input {
+  background: transparent; border: 0; border-bottom: 2px solid hsl(var(--foreground) / .3);
+  text-align: center; outline: none; color: inherit; font: inherit;
+}
+.code-input:focus { border-bottom-color: hsl(var(--foreground)); }
+
+/* --------------------------------------------------------------------------
+   7. Board & cells (grid games)
+   -------------------------------------------------------------------------- */
+.board {
+  display: grid; padding: .25rem; width: fit-content;
+  background: hsl(var(--foreground) / .1); border-radius: var(--radius); box-shadow: var(--shadow-lg);
+}
+.board--preview { filter: blur(8px); opacity: .6; }
+.board--transition { transition: filter var(--dur-screen) var(--ease), opacity var(--dur-screen) var(--ease); }
+
+.cell {
+  position: relative; display: flex; align-items: center; justify-content: center;
+  width: var(--cell-size); height: var(--cell-size);
+  background: hsl(var(--card)); border: 1px solid hsl(var(--border) / .5);
+  font-size: clamp(1rem, calc(var(--cell-size) * .46), 1.5rem);
+  transition: all var(--dur-fast) var(--ease);
+  user-select: none; cursor: pointer;
+}
+.cell:focus-visible        { outline: none; box-shadow: inset 0 0 0 2px hsl(var(--ring) / .5); }
+.cell--group-end-x         { border-right: 2px solid hsl(var(--foreground) / .3); }
+.cell--group-end-y         { border-bottom: 2px solid hsl(var(--foreground) / .3); }
+/* State fills are overlays on top of the card (background-image), never replacements. */
+.cell--group-done          { background-image: linear-gradient(hsl(var(--success) / .05), hsl(var(--success) / .05)); }
+.cell--given               { font-weight: 700; }
+.cell--player              { font-weight: 400; color: hsl(var(--foreground) / .8); z-index: 30; } /* dim the digit, not the cell */
+.cell--related             { background-image: linear-gradient(hsl(var(--foreground) / .05), hsl(var(--foreground) / .05)); }
+.cell--selected            { background-image: linear-gradient(hsl(var(--foreground) / .1), hsl(var(--foreground) / .1)); box-shadow: 0 0 0 2px hsl(var(--foreground) / .5); z-index: 40; }
+.cell--error {
+  color: hsl(var(--destructive)); font-weight: 600;
+  background-image: linear-gradient(hsl(var(--destructive) / .15), hsl(var(--destructive) / .15)); box-shadow: 0 0 0 1px hsl(var(--destructive) / .4);
+  animation: z-error-pulse 2s ease-in-out infinite; animation-delay: -10000s; /* keep all pulses in phase */
+  z-index: 20;
+}
+.cell--hint                { animation: z-hint-pulse var(--dur-pulse) ease-out forwards; }
+.cell-note { position: absolute; font-size: .5rem; line-height: 1; color: hsl(var(--foreground) / .5); }
+
+/* Page-wide end-state tint */
+.page-tint            { transition: background-color var(--dur-ambient) var(--ease); }
+.completion-success   { background-color: hsl(var(--success) / .12); }
+.completion-failure   { background-color: hsl(var(--destructive) / .12); }
+
+/* Radial dial */
+.dial-item {
+  position: absolute; width: 2.5rem; height: 2.5rem; border-radius: 9999px;
+  display: flex; align-items: center; justify-content: center;
+  background: hsl(var(--card)); border: 2px solid hsl(var(--foreground) / .2); box-shadow: var(--shadow-lg);
+  font-size: .875rem; font-weight: 600; transition: all var(--dur-instant) var(--ease);
+}
+.dial-item--disabled { color: hsl(var(--muted-foreground)); background: hsl(var(--muted)); border-color: hsl(var(--muted-foreground) / .2); }
+.dial-item--aim      { background: hsl(var(--accent)); color: hsl(var(--accent-foreground)); box-shadow: 0 0 0 2px hsl(var(--foreground) / .3), var(--shadow-lg); }
+.dial-item--commit   { background: hsl(var(--foreground)); color: hsl(var(--background)); }
+.dial-item--noted    { box-shadow: 0 0 0 2px hsl(var(--foreground) / .4), var(--shadow-lg); }
+
+/* --------------------------------------------------------------------------
+   8. Motion
+   -------------------------------------------------------------------------- */
+@keyframes z-fade-in  { from { opacity: 0 } to { opacity: 1 } }
+@keyframes z-scale-in { from { opacity: 0; transform: scale(.95) } to { opacity: 1; transform: scale(1) } }
+@keyframes z-slide-up { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: translateY(0) } }
+@keyframes z-error-pulse {
+  0%, 100% { box-shadow: 0 0 0 1px hsl(var(--destructive) / .4), inset 0 0 0 0 hsl(var(--destructive) / .15); }
+  50%      { box-shadow: 0 0 0 1px hsl(var(--destructive) / .4), inset 0 0 6px 1px hsl(var(--destructive) / .3); }
+}
+/* Hint pulse fills via an inset shadow so the cell's own background survives the animation. */
+@keyframes z-hint-pulse {
+  0%   { box-shadow: 0 0 0 0 hsl(var(--success) / .7),  inset 0 0 0 999px hsl(var(--success) / .3); }
+  50%  { box-shadow: 0 0 0 8px hsl(var(--success) / 0), inset 0 0 0 999px hsl(var(--success) / .15); }
+  100% { box-shadow: 0 0 0 0 hsl(var(--success) / 0),   inset 0 0 0 999px hsl(var(--success) / 0); }
+}
+.anim-fade-in  { animation: z-fade-in  var(--dur-chrome) var(--ease) both; }
+.anim-scale-in { animation: z-scale-in var(--dur-base)   var(--ease) both; }
+.anim-slide-up { animation: z-slide-up var(--dur-chrome) var(--ease) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 150ms !important;
+  }
+  .board--preview { filter: none; }
+}

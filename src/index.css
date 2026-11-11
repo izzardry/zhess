@@ -1,0 +1,8 @@
+/* Ztyle tokens, base layer and component recipes (copied from ~/Workspace/ztyle/tokens). */
+@import "./ztyle/ztyle.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Zhess-specific styles go below. Keep them in @layer components so utilities still win. */
