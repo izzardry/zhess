@@ -372,9 +372,15 @@ test.describe('milestone 2 · computer', () => {
     expect(tinted, `tinted ${tinted} vs neutral ${neutral}`).not.toEqual(neutral);
   });
 
-  test('offline after the first load, a new computer game still starts', async ({ page, context }) => {
+  test('the first launch downloads the computer with progress; offline, a computer game starts without one played online', async ({ page, context }) => {
     test.setTimeout(120_000);
     await page.goto('./');
+    // The start screen shows the download, then "ready offline" (DESIGN 4.1, 14).
+    const status = page.getByTestId('engine-status');
+    await expect(status).toHaveAttribute('data-status', /downloading|ready/);
+    await expect(status).toHaveAttribute('data-status', 'ready', { timeout: 60_000 });
+    await expect(status).toHaveText('Computer ready offline');
+
     // Wait for the service worker to control the page.
     await page.evaluate(async () => {
       await navigator.serviceWorker.ready;
@@ -382,12 +388,7 @@ test.describe('milestone 2 · computer', () => {
     if (!(await page.evaluate(() => !!navigator.serviceWorker.controller))) await page.reload();
     await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
 
-    // First computer game online: the engine is fetched through the service worker.
-    await startComputer(page, { color: 'w' });
-    await playMove(page, 'e2e4');
-    await expectPlies(page, 2);
-
-    // Runtime-cached in `engine-cache`, and not in the precache.
+    // Both files sit in `engine-cache`, and in no other cache (not in the precache).
     const cached = await page.evaluate(async () => {
       const names = await caches.keys();
       const out: Record<string, string[]> = {};
@@ -401,10 +402,16 @@ test.describe('milestone 2 · computer', () => {
       if (name !== 'engine-cache') expect(urls.filter((u) => u.includes('/engine/')), name).toEqual([]);
     }
 
-    // Offline: reload, leave the game, a new code, a new computer game.
+    // Offline, never having played the computer: reload, still ready, a computer game plays.
     await context.setOffline(true);
     await page.reload();
-    await expect(stage(page)).toHaveAttribute('data-phase', 'playing');
+    await expect(stage(page)).toHaveAttribute('data-phase', 'start');
+    await expect(status).toHaveAttribute('data-status', 'ready');
+    await startComputer(page, { color: 'w' });
+    await playMove(page, 'e2e4');
+    await expectPlies(page, 2, 10_000);
+
+    // Back to start and a second offline game with a new code.
     await page.getByRole('button', { name: 'Back to start' }).click();
     await expect(stage(page)).toHaveAttribute('data-phase', 'start');
     await page.getByRole('button', { name: /Tap for a new random code/ }).click();
@@ -412,13 +419,6 @@ test.describe('milestone 2 · computer', () => {
     await startPill(page).click();
     await expect(stage(page)).toHaveAttribute('data-phase', 'playing', { timeout: 30_000 });
     await expect(stage(page)).toHaveAttribute('data-engine', 'ready');
-    // The color pill says random (the `w=w` of the first start link is not a remembered choice).
-    if (query(page).get('w') === 'b') {
-      await expectPlies(page, 1, 10_000);
-    } else {
-      await playMove(page, 'd2d4');
-      await expectPlies(page, 2, 10_000);
-    }
     await context.setOffline(false);
   });
 });

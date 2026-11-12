@@ -2,6 +2,7 @@
 export { StartChrome, type StartChromeProps } from './StartChrome';
 export { Wordmark, StartHeader, StickyHeader, type WordmarkProps, type StartHeaderProps, type StickyHeaderProps } from './Wordmark';
 export { StartFooter, type StartFooterProps } from './StartFooter';
+export { EngineStatus, type EngineStatusProps } from './EngineStatus';
 export { CodeSelector, type CodeSelectorProps, type CodeSource } from './CodeSelector';
 export { OpponentSelector, type OpponentSelectorProps } from './OpponentSelector';
 export { ColorPill, ColorGlyph, type ColorPillProps } from './ColorPill';

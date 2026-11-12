@@ -19,7 +19,7 @@ Play it at **[izzardry.github.io/zhess](https://izzardry.github.io/zhess/)**.
 - **History and review** — the last 100 games; unfinished games resume, finished ones open in a replay viewer with "continue from here"
 - **Sharing by link** — a solo game travels as a URL with its moves; a room link carries only the code; PGN export
 - **Input** — tap-tap, drag, keyboard, or typed SAN
-- **PWA / installable** — offline after the first load (the computer after its first use; rooms need a network)
+- **PWA / installable** — offline after the first load; the computer downloads in the background on the first launch, with progress on the start screen (rooms need a network)
 - **Four languages** — English, German, French, Spanish
 - **Dark mode** — follows the system
 

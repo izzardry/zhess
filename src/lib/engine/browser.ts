@@ -7,8 +7,8 @@
  * against `document.baseURI`, which works for any deployment path under Vite `base: "./"`
  * (`https://host/zhess/` → `https://host/zhess/engine/stockfish-19-lite-single.js`) and in dev
  * (`/engine/…` served from `public/`). Vite does not touch the files in `public/engine/`, so no
- * worker bundling question arises, and the service worker caches both files at runtime
- * (`engine-cache`, CacheFirst; see vite.config.ts).
+ * worker bundling question arises, and the service worker serves both files from `engine-cache`
+ * (CacheFirst; see vite.config.ts), which the app fills on its first launch (./offline.ts).
  *
  * Download progress uses the engine's own hook: a `MessagePort` posted as `{ progressPort }`
  * receives `{ percent, loaded, total }` while the `.wasm` streams in.

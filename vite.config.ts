@@ -53,8 +53,9 @@ export default defineConfig(() => {
         },
         workbox: {
           globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
-          // The Stockfish engine (~1.9 MB) is not precached; it is fetched on first use
-          // and then served from the runtime cache below (DESIGN.md section 14).
+          // The Stockfish engine (~1.9 MB) is not precached: the app downloads it into the runtime
+          // cache below on its first launch, with progress on the start screen
+          // (src/lib/engine/offline.ts, DESIGN.md section 14).
           globIgnores: ["engine/**"],
           // Network-first HTML (Ztyle 12, DESIGN 14). index.html stays in the precache so the app
           // works offline from the first load, but navigations must not be answered from it:
@@ -76,7 +77,8 @@ export default defineConfig(() => {
               },
             },
             {
-              // Stockfish worker script and wasm: cache-first once fetched, so computer games work offline.
+              // Stockfish worker script and wasm: cache-first, so computer games work offline. The app
+              // fills this cache itself on the first launch (src/lib/engine/offline.ts).
               urlPattern: ({ url }) => /\/engine\/[^/]+\.(?:js|wasm)$/.test(url.pathname),
               handler: "CacheFirst",
               options: {

@@ -53,7 +53,7 @@ import {
   SupportButton,
   TutorialOverlay,
 } from '@/components/platform';
-import { BoardPreview, ClockDial, StartChrome, StartPill, useScrolled, type ClockPillAnchor } from '@/components/start';
+import { BoardPreview, ClockDial, EngineStatus, StartChrome, StartPill, useScrolled, type ClockPillAnchor } from '@/components/start';
 import { InviteSheet, ManualConnectSheet, PresenceDot, RoomBanner, RoomToasts, shouldOfferInvite, waitsAsAnchor } from '@/components/room';
 import { useIsMobileLandscape } from '@/hooks/use-orientation';
 import { useBlunderGuard } from '@/hooks/useBlunderGuard';
@@ -68,6 +68,7 @@ import { usePWAInstall } from '@/hooks/usePWAInstall';
 import { useSavedGames } from '@/hooks/useSavedGames';
 import { useSeating } from '@/hooks/useSeating';
 import { useSWUpdate } from '@/hooks/useSWUpdate';
+import { useEngineOffline } from '@/hooks/useEngineOffline';
 import { useTutorial } from '@/hooks/useTutorial';
 import { askComputerDraw } from '@/lib/drawOffer';
 import { flags } from '@/lib/flags';
@@ -143,6 +144,8 @@ export default function Index() {
   const gsRef = useRef(gs);
   gsRef.current = gs;
   const { checkForUpdate } = useSWUpdate({ shouldAutoReload: () => phaseRef.current === 'start' });
+  // Offline copy of the engine, downloaded on the first launch (DESIGN 14).
+  const engineOffline = useEngineOffline();
 
   const scrolled = useScrolled(50, isStart);
   const [showUI, setShowUI] = useState(true);
@@ -878,6 +881,7 @@ export default function Index() {
           settingsLocked={!!pillSaved}
           busy={animating}
           showChevron={saved.games.length > 0}
+          engineStatus={<EngineStatus state={engineOffline.state} onDownload={engineOffline.download} />}
           footerExtra={canInstall ? <InstallButton onClick={() => void install()} /> : undefined}
           onVersionTap={() => void checkForUpdate()}
         />

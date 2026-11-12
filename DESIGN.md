@@ -71,7 +71,7 @@ There are three ways to play. They share one board, one move model and one histo
 
 | Mode | Opponent | Network | Engine download |
 |------|----------|---------|-----------------|
-| **Computer** | Stockfish at level 1–12 | none | yes, on first use |
+| **Computer** | Stockfish at level 1–12 | none | yes, in the background on the first launch |
 | **Two players** (pass-and-play) | a person on the same device | none | only if a hint is requested |
 | **Room** | a person on another device | WebRTC | none |
 
@@ -115,8 +115,11 @@ Zudoku's start screen has a code field, a level stepper and one Start pill. Zhes
 
          ‹  COMPUTER · 5 MEDIUM  ›
            [ ◐ random ] [ ⏱ off ]
+         ✓ COMPUTER READY OFFLINE
                    ⌄
 ```
+
+**Computer status.** A faint line under the pills shows whether the computer is available offline, and its download progress on the first launch (see 14).
 
 **Opponent selector.** One stepper replaces Zudoku's level stepper. Its ordered values are:
 
@@ -655,8 +658,9 @@ Everything in Ztyle chapter 12 applies unchanged: PWA manifest, network-first HT
 
 Additions for Zhess:
 
-- The Stockfish files are excluded from the precache manifest and cached at runtime, `CacheFirst`.
-- After the engine has been fetched once, computer games work offline. Pass-and-play works offline from the first load. Rooms need a network.
+- The Stockfish files are excluded from the precache manifest. On the first launch the app downloads them itself into the runtime cache `engine-cache`, which the service worker serves `CacheFirst`. The page does the download, not the service worker install, so it can show progress. Every launch checks the cache again and downloads again if the copy is gone (iOS may evict it). Offline it waits for a connection; with Save-Data on it waits for a tap. **(owner request after the first release; was: on first use)**
+- The start screen shows the state under the pills: `Computer 43%` with a thin bar while downloading, `Computer ready offline` when cached, `Computer needs a connection` offline, and a tap to retry after a failure.
+- Computer games work offline once the download has finished, without a computer game first. Pass-and-play works offline from the first load. Rooms need a network.
 - Languages: EN, DE, FR, ES, complete including `aria-label`s. Move notation uses figurines from the piece set in the UI and English letters in PGN.
 - No sound and no vibration.
 - Theme follows the system, light and dark.
@@ -756,7 +760,7 @@ The Ztyle launch checklist is run after M3.
 4. **Offer size in a QR.** A compressed SDP offer must stay within a scannable QR. If it does not, the manual path falls back to links only.
 5. **Blunder guard latency.** A 150 ms budget at useful depth on a low-end phone is unproven. If it cannot be met, the guard runs only on levels where the engine is otherwise idle, or is cut down to mate-in-1 and hanging-piece detection without the engine.
 6. **Level feel.** The level table is a guess until played.
-7. **Engine size.** 1.8 MB is fetched on first use; the progress indicator and one-time caching are the mitigation.
+7. **Engine size.** 1.8 MB is downloaded on every first launch, also by visitors who never play the computer; the background start after the first paint, the Save-Data opt-out and one-time caching are the mitigation.
 
 **Open questions**
 

@@ -5,7 +5,7 @@
  *
  *   StartHeader   wordmark, tagline, CodeSelector          (idle start screen)
  *   StartFooter   OpponentSelector, ColorPill, ClockPill,   (idle start screen)
- *                 footerExtra, ScrollChevron
+ *                 engineStatus, footerExtra, ScrollChevron
  *   StickyHeader  small wordmark bar                        (scrolled past 50 px)
  *   BackToTop     FAB                                       (scrolled past 50 px)
  *   VersionStamp                                            (start screen)
@@ -54,6 +54,8 @@ export interface StartChromeProps {
 
   /** Show the bounce chevron (e.g. only when there is history below). Default true. */
   showChevron?: boolean;
+  /** The computer's offline state (`EngineStatus`), under the pills. */
+  engineStatus?: ReactNode;
   /** Extra footer content, e.g. the install pill. */
   footerExtra?: ReactNode;
   /** Called when the version stamp is tapped (after copying), e.g. the SW update check. */
@@ -78,6 +80,7 @@ export function StartChrome({
   colorLocked = false,
   busy = false,
   showChevron = true,
+  engineStatus,
   footerExtra,
   onVersionTap,
 }: StartChromeProps) {
@@ -108,6 +111,7 @@ export function StartChrome({
             )}
           </>
         }
+        status={engineStatus}
         extra={footerExtra}
         chevron={showChevron ? <ScrollChevron hidden={!idle} /> : undefined}
       />
