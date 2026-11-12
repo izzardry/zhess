@@ -121,8 +121,8 @@ export const BoardSquare = memo(function BoardSquare({
 
       {check && (
         <>
-          <span aria-hidden className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-destructive/40" />
-          <span aria-hidden className="pointer-events-none absolute inset-0 animate-error-pulse" />
+          <span aria-hidden className="pointer-events-none absolute inset-0 rounded-[inherit] ring-1 ring-inset ring-destructive/40" />
+          <span aria-hidden className="pointer-events-none absolute inset-0 rounded-[inherit] animate-error-pulse" />
         </>
       )}
 
@@ -151,22 +151,22 @@ export const BoardSquare = memo(function BoardSquare({
         <span
           aria-hidden
           data-marker="ring"
-          className="pointer-events-none absolute inset-0"
+          className="pointer-events-none absolute inset-0 rounded-[inherit]"
           style={{ background: `radial-gradient(transparent 0 64%, ${FG(0.25)} 65% 72%, transparent 73%)` }}
         />
       )}
 
-      {selected && <span aria-hidden className="pointer-events-none absolute inset-0 ring-2 ring-inset ring-foreground/50" />}
-      {dropOver && <span aria-hidden className="pointer-events-none absolute inset-0 ring-2 ring-inset ring-foreground/40" />}
+      {selected && <span aria-hidden className="pointer-events-none absolute inset-0 rounded-[inherit] ring-2 ring-inset ring-foreground/50" />}
+      {dropOver && <span aria-hidden className="pointer-events-none absolute inset-0 rounded-[inherit] ring-2 ring-inset ring-foreground/40" />}
       {premove && (
         <span
           aria-hidden
           data-marker="premove"
-          className="pointer-events-none absolute inset-0 outline-dashed outline-2 outline-foreground/40"
+          className="pointer-events-none absolute inset-0 rounded-[inherit] outline-dashed outline-2 outline-foreground/40"
           style={{ outlineOffset: '-3px' }}
         />
       )}
-      {hintKey > 0 && <span key={hintKey} aria-hidden data-marker="hint" className="zhess-hint pointer-events-none absolute inset-0 animate-hint-pulse" />}
+      {hintKey > 0 && <span key={hintKey} aria-hidden data-marker="hint" className="zhess-hint pointer-events-none absolute inset-0 z-[1] rounded-[inherit] animate-hint-pulse" />}
     </div>
   );
 });

@@ -203,7 +203,7 @@ export function ChessBoard({
           aria-label={t('board.label')}
           aria-describedby={instructionsId}
           aria-readonly={!interactive || undefined}
-          className={cn('flex flex-col overflow-hidden rounded-md', interactive && 'touch-none')}
+          className={cn('zhess-grid flex flex-col rounded-md', interactive && 'touch-none')}
           style={interactive ? { touchAction: 'none', WebkitTouchCallout: 'none' } as CSSProperties : undefined}
           {...input.gridHandlers}
           onContextMenu={interactive ? (e) => e.preventDefault() : undefined}

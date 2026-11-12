@@ -50,6 +50,15 @@
   animation: zhess-typed-shake 200ms ease-in-out 2;
 }
 
+/*
+ * The grid does not clip its squares (the hint pulse's outer glow must reach past the board edge),
+ * so the four corner squares carry the grid's rounding themselves; their overlays inherit it.
+ */
+.zhess-grid > [role="row"]:first-child > .zhess-square:first-child { border-top-left-radius: calc(var(--radius) - 2px); }
+.zhess-grid > [role="row"]:first-child > .zhess-square:last-child { border-top-right-radius: calc(var(--radius) - 2px); }
+.zhess-grid > [role="row"]:last-child > .zhess-square:first-child { border-bottom-left-radius: calc(var(--radius) - 2px); }
+.zhess-grid > [role="row"]:last-child > .zhess-square:last-child { border-bottom-right-radius: calc(var(--radius) - 2px); }
+
 /* Brand focus ring on cells (Ztyle 16): inset, never the browser outline. */
 .zhess-square:focus-visible {
   outline: none;
