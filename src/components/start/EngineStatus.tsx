@@ -1,7 +1,10 @@
 /**
  * Offline state of the computer on the start screen (DESIGN 4.1, 14): download progress on the
  * first launch, then "ready offline". When the copy is missing it says why, and a tap retries.
- * Nothing is shown while checking or where offline caching is unsupported.
+ *
+ * While the cache is being checked, an empty line of the same height holds the place, so the
+ * answer arriving a moment after the first paint does not push the footer up. Each new state fades
+ * in over 300 ms. Where offline caching is unsupported nothing is shown (known at once).
  */
 import { Check, Download, RotateCw, WifiOff } from 'lucide-react';
 import type { EngineOfflineStatus } from '@/lib/engine/offline';
@@ -16,14 +19,19 @@ export interface EngineStatusProps {
 }
 
 const LINE = 'flex h-6 items-center justify-center gap-1.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground';
+/** A state that has arrived fades in (Ztyle `fade-in`, 300 ms); the key restarts it per state. */
+const IN = 'animate-fade-in';
 
 export function EngineStatus({ state, onDownload, className }: EngineStatusProps) {
   const { t } = useI18n();
-  if (state.status === 'unsupported' || state.status === 'checking') return null;
+  if (state.status === 'unsupported') return null;
+  if (state.status === 'checking') {
+    return <div aria-hidden className={cn(LINE, className)} key="checking" data-testid="engine-status" data-status="checking" />;
+  }
 
   if (state.status === 'downloading') {
     return (
-      <div className={cn(LINE, className)} data-testid="engine-status" data-status="downloading">
+      <div className={cn(LINE, IN, className)} key="downloading" data-testid="engine-status" data-status="downloading">
         <span>{t('start.engine.downloading', { percent: state.percent })}</span>
         <span
           role="progressbar"
@@ -44,7 +52,7 @@ export function EngineStatus({ state, onDownload, className }: EngineStatusProps
 
   if (state.status === 'ready') {
     return (
-      <div role="status" className={cn(LINE, 'text-muted-foreground/60', className)} data-testid="engine-status" data-status="ready">
+      <div role="status" className={cn(LINE, IN, 'text-muted-foreground/60', className)} key="ready" data-testid="engine-status" data-status="ready">
         <Check aria-hidden className="h-3 w-3" />
         <span>{t('start.engine.ready')}</span>
       </div>
@@ -53,7 +61,7 @@ export function EngineStatus({ state, onDownload, className }: EngineStatusProps
 
   if (state.reason === 'offline') {
     return (
-      <div role="status" className={cn(LINE, className)} data-testid="engine-status" data-status="offline">
+      <div role="status" className={cn(LINE, IN, className)} key="offline" data-testid="engine-status" data-status="offline">
         <WifiOff aria-hidden className="h-3 w-3" />
         <span>{t('start.engine.offline')}</span>
       </div>
@@ -65,7 +73,8 @@ export function EngineStatus({ state, onDownload, className }: EngineStatusProps
     <button
       type="button"
       onClick={onDownload}
-      className={cn(LINE, 'rounded-full px-2 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60', className)}
+      className={cn(LINE, IN, 'rounded-full px-2 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60', className)}
+      key={state.reason}
       data-testid="engine-status"
       data-status={state.reason}
     >

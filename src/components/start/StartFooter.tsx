@@ -50,7 +50,25 @@ export function StartFooter({ visible, landscape = false, selector, pills, statu
         </div>
       )}
       {status && <div className={cn(!landscape && 'mt-2')}>{status}</div>}
-      {extra && <div className={cn(!landscape && 'mt-4')}>{extra}</div>}
+      {/*
+        The install pill arrives late (Chromium's beforeinstallprompt). The footer is anchored at the
+        bottom, so new content would push everything above it up at once; the slot instead opens
+        over 300 ms (grid rows 0fr → 1fr) while the pill fades in, and the footer glides.
+        In landscape the footer is one centred row and nothing above it moves, so it just fades in.
+      */}
+      {landscape ? (
+        extra && <div className="animate-fade-in">{extra}</div>
+      ) : (
+        <div
+          data-testid="start-extra"
+          data-open={!!extra}
+          className="grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none"
+          style={{ gridTemplateRows: extra ? '1fr' : '0fr' }}
+        >
+          {/* p-1 keeps the pill's border and focus ring clear of the clip; with mt-3 it is the old mt-4. */}
+          <div className="min-h-0 overflow-hidden">{extra && <div className="animate-fade-in mt-3 p-1">{extra}</div>}</div>
+        </div>
+      )}
       {chevron && !landscape && <div className="mt-6">{chevron}</div>}
     </div>
   );

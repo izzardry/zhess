@@ -79,8 +79,16 @@ describe('useEngineOffline', () => {
 describe('EngineStatus', () => {
   it('renders progress, ready, offline and the retry button', () => {
     const onDownload = vi.fn();
-    const { rerender, container } = render(<EngineStatus state={{ status: 'checking' }} onDownload={onDownload} />, { wrapper: wrap });
+    const { rerender, container } = render(<EngineStatus state={{ status: 'unsupported' }} onDownload={onDownload} />, { wrapper: wrap });
     expect(container).toBeEmptyDOMElement();
+
+    // While checking, an empty line of the same height holds the place, so the answer doesn't shift the footer.
+    rerender(<EngineStatus state={{ status: 'checking' }} onDownload={onDownload} />);
+    const placeholder = screen.getByTestId('engine-status');
+    expect(placeholder).toHaveAttribute('data-status', 'checking');
+    expect(placeholder).toBeEmptyDOMElement();
+    expect(placeholder).toHaveAttribute('aria-hidden');
+    expect(placeholder.className).toContain('h-6');
 
     rerender(<EngineStatus state={{ status: 'downloading', percent: 43 }} onDownload={onDownload} />);
     expect(screen.getByText('Computer 43%')).toBeInTheDocument();
@@ -88,6 +96,7 @@ describe('EngineStatus', () => {
 
     rerender(<EngineStatus state={{ status: 'ready' }} onDownload={onDownload} />);
     expect(screen.getByRole('status')).toHaveTextContent('Computer ready offline');
+    expect(screen.getByTestId('engine-status').className).toMatch(/\bh-6\b.*animate-fade-in|animate-fade-in.*\bh-6\b/);
 
     rerender(<EngineStatus state={{ status: 'missing', reason: 'offline' }} onDownload={onDownload} />);
     expect(screen.getByRole('status')).toHaveTextContent('Computer needs a connection');

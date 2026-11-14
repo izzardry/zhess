@@ -664,6 +664,7 @@ Additions for Zhess:
 - Languages: EN, DE, FR, ES, complete including `aria-label`s. Move notation uses figurines from the piece set in the UI and English letters in PGN.
 - No sound and no vibration.
 - Theme follows the system, light and dark.
+- **First paint.** `index.html` sets the theme class and the page colour before any CSS or script loads, so a dark system never flashes a light page. The app stays invisible until the brand font's start-screen weights are loaded and the first layout (including the preview fit) is done, at most 1 s, and then fades in over 300 ms. Content that arrives later keeps its place or glides: the computer status line holds its height while the cache is checked, and the install pill's slot opens over 300 ms. **(owner request after the first release)**
 
 ### 14.1 Accessibility
 
